@@ -5,6 +5,7 @@ module github.com/madirajupranaykashyap/SignalForge-Community/collector
 go 1.25.0
 
 require (
+	github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.159.0
 	github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.159.0
 	go.opentelemetry.io/collector/component v1.65.0
 	go.opentelemetry.io/collector/confmap v1.65.0
@@ -28,6 +29,7 @@ require (
 
 require (
 	cloud.google.com/go/compute/metadata v0.9.0 // indirect
+	github.com/DeRuina/timberjack v1.4.6 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.35.0 // indirect
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/participle/v2 v2.1.4 // indirect
@@ -77,6 +79,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.159.0 // indirect
+	github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.159.0 // indirect
 	github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.159.0 // indirect
 	github.com/pierrec/lz4/v4 v4.1.28 // indirect

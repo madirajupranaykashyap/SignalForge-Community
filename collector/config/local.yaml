@@ -19,13 +19,27 @@ processors:
     error_mode: ignore
     log_conditions:
       - 'log.body == "HEALTH_CHECK"'
+  memory_limiter/archive:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  batch/archive:
+    timeout: 1s
+    send_batch_size: 1024
 
 exporters:
   debug:
     verbosity: detailed
+  file/archive:
+    path: ./data/archive/logs.jsonl
+    append: true
+    create_directory: true
 
 service:
   telemetry:
+    logs:
+      level: debug
     metrics:
       level: detailed
   pipelines:
@@ -33,6 +47,11 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, batch, filter]
       exporters: [debug]
+    # Independent archive output before vendor filtering.
+    logs/archive:
+      receivers: [otlp]
+      processors: [memory_limiter/archive, batch/archive]
+      exporters: [file/archive]
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, batch]

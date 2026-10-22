@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "run_id": "1792685528_35641",
+  "generated_at_utc": "2026-10-22T16:12:09Z",
+  "results": {
+    "records_submitted": 100,
+    "records_received": 100,
+    "records_filtered": 50,
+    "records_sent_to_debug_exporter": 50,
+    "records_archived": 100,
+    "record_reduction_percent": 50.0,
+    "original_otlp_json_bytes": 15346,
+    "filtered_otlp_json_equivalent_bytes": 8656,
+    "estimated_bytes_saved": 6690,
+    "estimated_byte_reduction_percent": 43.59
+  },
+  "measurement": {
+    "vendor_wire_bytes_measured": false,
+    "monetary_savings_calculated": false,
+    "note": "Filtered payload size is an equivalent OTLP JSON estimate. It is not measured vendor wire traffic or confirmed billing savings."
+  }
+}
