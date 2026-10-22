@@ -162,3 +162,28 @@ func TestCalculateEstimateZeroSavings(t *testing.T) {
 			got.Monthly.SavingsPercent)
 	}
 }
+
+func TestBenchmarkReportContainsLogEventCounts(t *testing.T) {
+	report := sampleReport(15346, 8656)
+
+	report.Results.LogEventsSubmitted = 100
+	report.Results.LogEventsFiltered = 50
+	report.Results.LogEventsSentToDebugExporter = 50
+	report.Results.LogEventsArchived = 100
+
+	if report.Results.LogEventsSubmitted != 100 {
+		t.Fatal("expected 100 submitted log events")
+	}
+
+	if report.Results.LogEventsFiltered != 50 {
+		t.Fatal("expected 50 filtered log events")
+	}
+
+	if report.Results.LogEventsSentToDebugExporter != 50 {
+		t.Fatal("expected 50 output log events")
+	}
+
+	if report.Results.LogEventsArchived != 100 {
+		t.Fatal("expected 100 archived log events")
+	}
+}

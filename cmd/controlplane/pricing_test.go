@@ -56,3 +56,52 @@ func TestCalculateEstimateUsesSelectedProfile(t *testing.T) {
 			got.Monthly.SavingsPercent)
 	}
 }
+
+func TestDatadogProfileUsesPublishedDefaultRate(t *testing.T) {
+	model := DatadogLogIngestionPricing{}
+
+	price, err := model.ResolvePrice(0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if price != 0.10 {
+		t.Fatalf("price = %v, want 0.10", price)
+	}
+}
+
+func TestDatadogProfileRejectsCustomRate(t *testing.T) {
+	model := DatadogLogIngestionPricing{}
+
+	_, err := model.ResolvePrice(0.25)
+	if err == nil {
+		t.Fatal("expected a custom rate to be rejected")
+	}
+}
+
+func TestDatadogProfileCalculatesIngestionCost(t *testing.T) {
+	model := DatadogLogIngestionPricing{}
+
+	price, err := model.ResolvePrice(0)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	got := model.CalculateCost(100, price)
+	want := 10.0
+
+	if got != want {
+		t.Errorf("cost = %v, want %v", got, want)
+	}
+}
+
+func TestResolvePricingModelSupportsDatadog(t *testing.T) {
+	model, err := resolvePricingModel("datadog-logs-ingestion")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if model.ID() != "datadog-logs-ingestion" {
+		t.Errorf("model ID = %q", model.ID())
+	}
+}

@@ -28,6 +28,10 @@ type BenchmarkReport struct {
 		FilteredOTLPJSONEquivalentBytes int64   `json:"filtered_otlp_json_equivalent_bytes"`
 		EstimatedBytesSaved             int64   `json:"estimated_bytes_saved"`
 		EstimatedByteReductionPercent   float64 `json:"estimated_byte_reduction_percent"`
+		LogEventsSubmitted              int64   `json:"log_events_submitted"`
+		LogEventsFiltered               int64   `json:"log_events_filtered"`
+		LogEventsSentToDebugExporter    int64   `json:"log_events_sent_to_debug_exporter"`
+		LogEventsArchived               int64   `json:"log_events_archived"`
 	} `json:"results"`
 	Measurement struct {
 		VendorWireBytesMeasured   bool   `json:"vendor_wire_bytes_measured"`
@@ -37,18 +41,22 @@ type BenchmarkReport struct {
 }
 
 type EstimateRequest struct {
-	RunID          string  `json:"run_id"`
-	PricePerGBUSD  float64 `json:"price_per_gb_usd"`
-	BatchesPerDay  int64   `json:"benchmark_batches_per_day"`
-	DaysPerMonth   int64   `json:"days_per_month"`
-	PricingProfile string  `json:"pricing_profile,omitempty"`
+	RunID                    string  `json:"run_id"`
+	PricePerGBUSD            float64 `json:"price_per_gb_usd"`
+	BatchesPerDay            int64   `json:"benchmark_batches_per_day"`
+	DaysPerMonth             int64   `json:"days_per_month"`
+	PricingProfile           string  `json:"pricing_profile,omitempty"`
+	PricePerMillionEventsUSD float64 `json:"price_per_million_events_usd,omitempty"`
 }
 
 type EstimateResponse struct {
-	RunID          string `json:"run_id"`
-	Currency       string `json:"currency"`
-	PricingUnit    string `json:"pricing_unit"`
-	PricingProfile string `json:"pricing_profile"`
+	RunID            string            `json:"run_id"`
+	Currency         string            `json:"currency"`
+	Indexing         *IndexingEstimate `json:"indexing,omitempty"`
+	PricingUnit      string            `json:"pricing_unit"`
+	PricingProfile   string            `json:"pricing_profile"`
+	PricingSourceURL string            `json:"pricing_source_url,omitempty"`
+	PricingNote      string            `json:"pricing_note"`
 
 	Assumptions struct {
 		PricePerGBUSD float64 `json:"price_per_gb_usd"`
@@ -216,11 +224,6 @@ func (a *API) createEstimate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.PricePerGBUSD <= 0 || req.PricePerGBUSD > 1_000_000 {
-		writeError(w, http.StatusBadRequest, "price_per_gb_usd must be greater than 0 and at most 1000000")
-		return
-	}
-
 	if req.BatchesPerDay < 1 || req.BatchesPerDay > 1_000_000 {
 		writeError(w, http.StatusBadRequest, "benchmark_batches_per_day must be between 1 and 1000000")
 		return
@@ -228,6 +231,16 @@ func (a *API) createEstimate(w http.ResponseWriter, r *http.Request) {
 
 	if req.DaysPerMonth < 1 || req.DaysPerMonth > 31 {
 		writeError(w, http.StatusBadRequest, "days_per_month must be between 1 and 31")
+		return
+	}
+
+	if req.PricePerMillionEventsUSD < 0 ||
+		req.PricePerMillionEventsUSD > 1_000_000 {
+		writeError(
+			w,
+			http.StatusBadRequest,
+			"price_per_million_events_usd must be between 0 and 1000000",
+		)
 		return
 	}
 
@@ -259,12 +272,18 @@ func (a *API) createEstimate(w http.ResponseWriter, r *http.Request) {
 
 	result, err := calculateEstimate(report, req)
 	if err != nil {
-		writeError(
-			w,
-			http.StatusUnprocessableEntity,
-			err.Error(),
-		)
+		writeError(w, http.StatusUnprocessableEntity, err.Error())
 		return
+	}
+
+	if req.PricePerMillionEventsUSD > 0 {
+		indexing, err := calculateIndexingEstimate(report, req)
+		if err != nil {
+			writeError(w, http.StatusUnprocessableEntity, err.Error())
+			return
+		}
+
+		result.Indexing = indexing
 	}
 	writeJSON(w, http.StatusOK, result)
 }

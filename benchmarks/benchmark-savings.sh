@@ -227,7 +227,11 @@ report = {
         "estimated_byte_reduction_percent": (
             round(bytes_saved * 100 / input_bytes, 2)
             if input_bytes else None
-        )
+        ),
+        "log_events_submitted": int(os.environ["TOTAL"]),
+        "log_events_filtered": filtered,
+        "log_events_sent_to_debug_exporter": int(os.environ["VENDOR"]),
+        "log_events_archived": int(os.environ["ARCHIVED"]),
     },
     "measurement": {
         "vendor_wire_bytes_measured": False,
@@ -245,3 +249,13 @@ with open(sys.argv[1], "w", encoding="utf-8") as f:
 
 print(f"Benchmark report saved: {sys.argv[1]}")
 PY
+
+if [[ "$TOTAL" -ne 100 ||
+      "$filtered" -ne 50 ||
+      "$vendor" -ne 50 ||
+      "$archive_count" -ne 100 ]]; then
+    echo "FAIL: Log event counts do not match expected values."
+    exit 1
+fi
+
+echo "PASS: Log event counts match expected values."

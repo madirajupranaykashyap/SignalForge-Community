@@ -13,11 +13,15 @@ func calculateEstimate(
 	report BenchmarkReport,
 	req EstimateRequest,
 ) (EstimateResponse, error) {
-	if req.PricePerGBUSD <= 0 ||
-		math.IsNaN(req.PricePerGBUSD) ||
-		math.IsInf(req.PricePerGBUSD, 0) ||
-		req.PricePerGBUSD > 1_000_000 {
-		return EstimateResponse{}, errors.New("price_per_gb_usd must be greater than 0 and at most 1000000")
+
+	model, err := resolvePricingModel(req.PricingProfile)
+	if err != nil {
+		return EstimateResponse{}, err
+	}
+
+	effectivePrice, err := model.ResolvePrice(req.PricePerGBUSD)
+	if err != nil {
+		return EstimateResponse{}, err
 	}
 
 	if req.BatchesPerDay < 1 || req.BatchesPerDay > 1_000_000 {
@@ -53,21 +57,15 @@ func calculateEstimate(
 	filteredGB := filteredMonthlyBytes / float64(bytesPerGB)
 	savedGB := originalGB - filteredGB
 
-	model, err := resolvePricingModel(req.PricingProfile)
-	if err != nil {
-		return EstimateResponse{}, err
-	}
-
-	originalCost := model.CalculateCost(originalGB, req.PricePerGBUSD)
-	filteredCost := model.CalculateCost(filteredGB, req.PricePerGBUSD)
+	originalCost := model.CalculateCost(originalGB, effectivePrice)
+	filteredCost := model.CalculateCost(filteredGB, effectivePrice)
 	savings := originalCost - filteredCost
 
 	var result EstimateResponse
 	result.RunID = report.RunID
 	result.Currency = "USD"
-	result.PricingUnit = "decimal GB (1 GB = 1,000,000,000 bytes)"
 
-	result.Assumptions.PricePerGBUSD = req.PricePerGBUSD
+	result.Assumptions.PricePerGBUSD = effectivePrice
 	result.Assumptions.BatchesPerDay = req.BatchesPerDay
 	result.Assumptions.DaysPerMonth = req.DaysPerMonth
 	result.Assumptions.BytesPerGB = bytesPerGB
@@ -86,6 +84,9 @@ func calculateEstimate(
 
 	result.Disclaimer = "Illustrative estimate based on equivalent OTLP JSON payload sizes. Not actual vendor wire bytes, verified billable ingestion, or a vendor quote. Assumes the configured price applies linearly to every decimal GB."
 	result.PricingProfile = model.ID()
+	result.PricingUnit = model.PricingUnit()
+	result.PricingSourceURL = model.SourceURL()
+	result.PricingNote = model.Note()
 	return result, nil
 }
 
