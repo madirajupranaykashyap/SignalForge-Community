@@ -53,8 +53,13 @@ func calculateEstimate(
 	filteredGB := filteredMonthlyBytes / float64(bytesPerGB)
 	savedGB := originalGB - filteredGB
 
-	originalCost := linearGBPrice(originalGB, req.PricePerGBUSD)
-	filteredCost := linearGBPrice(filteredGB, req.PricePerGBUSD)
+	model, err := resolvePricingModel(req.PricingProfile)
+	if err != nil {
+		return EstimateResponse{}, err
+	}
+
+	originalCost := model.CalculateCost(originalGB, req.PricePerGBUSD)
+	filteredCost := model.CalculateCost(filteredGB, req.PricePerGBUSD)
 	savings := originalCost - filteredCost
 
 	var result EstimateResponse
@@ -80,7 +85,7 @@ func calculateEstimate(
 	}
 
 	result.Disclaimer = "Illustrative estimate based on equivalent OTLP JSON payload sizes. Not actual vendor wire bytes, verified billable ingestion, or a vendor quote. Assumes the configured price applies linearly to every decimal GB."
-
+	result.PricingProfile = model.ID()
 	return result, nil
 }
 

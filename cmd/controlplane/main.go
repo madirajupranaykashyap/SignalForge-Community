@@ -37,16 +37,18 @@ type BenchmarkReport struct {
 }
 
 type EstimateRequest struct {
-	RunID         string  `json:"run_id"`
-	PricePerGBUSD float64 `json:"price_per_gb_usd"`
-	BatchesPerDay int64   `json:"benchmark_batches_per_day"`
-	DaysPerMonth  int64   `json:"days_per_month"`
+	RunID          string  `json:"run_id"`
+	PricePerGBUSD  float64 `json:"price_per_gb_usd"`
+	BatchesPerDay  int64   `json:"benchmark_batches_per_day"`
+	DaysPerMonth   int64   `json:"days_per_month"`
+	PricingProfile string  `json:"pricing_profile,omitempty"`
 }
 
 type EstimateResponse struct {
-	RunID       string `json:"run_id"`
-	Currency    string `json:"currency"`
-	PricingUnit string `json:"pricing_unit"`
+	RunID          string `json:"run_id"`
+	Currency       string `json:"currency"`
+	PricingUnit    string `json:"pricing_unit"`
+	PricingProfile string `json:"pricing_profile"`
 
 	Assumptions struct {
 		PricePerGBUSD float64 `json:"price_per_gb_usd"`
