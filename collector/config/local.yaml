@@ -25,6 +25,9 @@ exporters:
     verbosity: detailed
 
 service:
+  telemetry:
+    metrics:
+      level: detailed
   pipelines:
     logs:
       receivers: [otlp]
