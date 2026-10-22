@@ -15,16 +15,20 @@ processors:
   batch:
     timeout: 1s
     send_batch_size: 1024
+  filter:
+    error_mode: ignore
+    log_conditions:
+      - 'log.body == "HEALTH_CHECK"'
 
 exporters:
   debug:
-    verbosity: basic
+    verbosity: detailed
 
 service:
   pipelines:
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter, batch, filter]
       exporters: [debug]
     metrics:
       receivers: [otlp]
