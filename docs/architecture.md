@@ -63,3 +63,20 @@ This is not yet live control-plane delivery: OIDC tenant identity, shared
 transactional persistence, a poller with bounded retry/backoff, actual Collector
 schema validation, and a transactional pipeline swap adapter remain release
 gates. See [Config Cache](config-cache.md) and its [test plan](config-cache-test-plan.md).
+
+## Phase 19: authenticated remote config polling
+
+The `internal/configclient` package polls the management API using an agent
+bearer credential, validates the versioned envelope via the Phase 18 cache,
+delegates runtime activation, and acknowledges applied or rejected versions.
+Remote endpoints require HTTPS; loopback HTTP is allowed only for development.
+The poller uses bounded response sizes, request timeouts, exponential backoff,
+and jitter. A missing assignment is a healthy no-op.
+
+The management API canonicalizes policy JSON before digesting it so the
+payload digest survives JSON transport. The poller is not yet wired to an actual
+Collector pipeline. Production enablement still requires OIDC tenant-user
+authorization, shared transactional persistence, a distribution-specific
+Collector validator, a transactional pipeline swap, and end-to-end outage tests.
+See [Config Polling Client](config-polling-client.md) and its
+[test plan](config-polling-test-plan.md).
