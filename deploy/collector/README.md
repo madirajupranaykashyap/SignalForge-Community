@@ -224,3 +224,37 @@ means optimized throughput exceeded input throughput during the selected rate
 window; investigate the counters and scrape coverage. Sparse traffic can make
 the percentage noisy. These charts do not estimate payload bytes, infrastructure
 cost, or money saved.
+
+## Prometheus configuration and alerting
+
+Start with `prometheus/prometheus.yml.example` and adjust the scrape target to an
+address reachable from the Prometheus process. The example loads both
+`prometheus/recording-rules.yml` and `prometheus/alerting-rules.yml`; the
+scrape job name must remain `signalforge-collector` unless you also update the
+alert expressions. Validate configuration and rules before reloading Prometheus:
+
+```bash
+promtool check config /path/to/prometheus.yml
+promtool check rules deploy/collector/prometheus/recording-rules.yml
+promtool check rules deploy/collector/prometheus/alerting-rules.yml
+```
+
+The included alert rules cover three operational signals:
+
+- **Collector scrape missing**: Prometheus reports the Collector target down for
+  two minutes.
+- **No input log records**: the Collector is scrapeable, but the input counter
+  is absent for ten minutes. This can be expected when the deployment is idle;
+  tune or disable this alert if zero traffic is normal.
+- **Negative record reduction**: optimized throughput exceeds input throughput
+  for ten minutes. Investigate scrape coverage, counter resets, and pipeline
+  topology rather than interpreting this as savings.
+
+The Collector metrics endpoint defaults to loopback. Configure Prometheus on the
+same host or provide a deliberately restricted, reachable network path; do not
+expose the endpoint publicly. The dashboard and alerts depend on the recording
+rules being loaded and evaluated. CI validates the Prometheus configuration,
+recording/alerting rule syntax, and dashboard JSON structure, in addition to the
+existing Collector build and ingestion smoke tests. Live Grafana rendering and
+production alert routing still need to be verified in the target environment.
+
