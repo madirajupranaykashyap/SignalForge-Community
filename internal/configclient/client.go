@@ -212,6 +212,12 @@ func (p *Poller) Run(ctx context.Context) error {
 	if p.Fetcher == nil || p.Cache == nil {
 		return errors.New("config poller requires a fetcher and cache")
 	}
+	if _, err := p.Cache.Restore(ctx, p.Validate, p.Activate); err != nil {
+		p.mu.Lock()
+		p.status.LastError = safeError(err)
+		p.mu.Unlock()
+		return fmt.Errorf("restore last-known-good config: %w", err)
+	}
 	interval := p.Interval
 	if interval <= 0 { interval = 30 * time.Second }
 	minBackoff := p.MinBackoff
