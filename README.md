@@ -15,6 +15,10 @@ SignalForge is a vendor-neutral telemetry optimization platform that helps engin
 
 Early development. The initial milestone is to demonstrate telemetry reduction, archive completeness, and measurable pipeline overhead.
 
+## Deployment
+
+A Podman Compose package for the custom OpenTelemetry Collector is available in [deploy/collector](deploy/collector/README.md). It binds OTLP ports to loopback by default and persists received logs in a JSONL archive. Review the deployment guide before exposing OTLP endpoints to other hosts.
+
 ## Development
 
 See `docs/architecture.md` for the architecture and development plan.
@@ -22,4 +26,3 @@ See `docs/architecture.md` for the architecture and development plan.
 ## License
 
 Community components are licensed under Apache License 2.0. Check each component's license and third-party notices before redistribution.
-
