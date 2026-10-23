@@ -13,7 +13,10 @@ SignalForge is a vendor-neutral telemetry optimization platform that helps engin
 
 ## Project status
 
-Early development. The initial milestone is to demonstrate telemetry reduction, archive completeness, and measurable pipeline overhead.
+Early development. The Collector accepts OTLP logs, traces, and metrics. The first
+policy-driven optimization baseline drops DEBUG logs and known health-check noise
+from the downstream log stream while preserving all received logs in the raw archive.
+Traces and metrics currently go to debug output and are not durably archived.
 
 ## Deployment
 
