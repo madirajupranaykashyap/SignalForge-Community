@@ -47,6 +47,7 @@ jobs:
           --health-retries 10
     env:
       SIGNALFORGE_TEST_POSTGRES_URL: postgres://signalforge:signalforge-ci-password@localhost:5432/signalforge_test?sslmode=disable
+      SIGNALFORGE_TEST_POSTGRES_RESTORE_URL: postgres://signalforge:signalforge-ci-password@localhost:5432/signalforge_restore_test?sslmode=disable
     steps:
       - name: Check out source
         uses: actions/checkout@v4

@@ -54,3 +54,26 @@ Run a restore drill before each production release and at least quarterly therea
 ## Boundaries and production gates
 
 SQLite WAL is intended for a local persistent filesystem and multiple processes on one host; it is not suitable for a multi-host control plane or NFS. Before horizontal SaaS scaling, migrate to PostgreSQL or an equivalent server database. Keep the management service on loopback/private networking behind TLS, store bootstrap and agent credentials in a secret manager, and review OIDC tenant/role claims with the identity provider. These scripts do not encrypt backups; encryption and off-host retention must be supplied by the operator.
+
+
+## PostgreSQL encrypted backup and restore
+
+For PostgreSQL deployments, use the encrypted helper rather than the SQLite scripts. Install PostgreSQL client tools and `age`; store the age **recipient** (public key) in deployment configuration and keep the corresponding identity (private key) in a separate secret manager or offline recovery location.
+
+Create a validated custom-format dump and encrypt it before publication:
+
+```bash
+scripts/management-backup-postgres-encrypted.sh "$SIGNALFORGE_MANAGEMENT_DATABASE_URL" "age1..." /path/to/encrypted-off-host-staging
+```
+
+The script writes the plaintext dump only into a mode-0700 temporary directory, validates the dump, encrypts it with `age`, applies mode 0600, and atomically publishes only the encrypted artifact. Transfer that artifact to encrypted, access-controlled off-host storage using the organization's approved retention policy.
+
+Restore into a **new empty PostgreSQL database**:
+
+```bash
+scripts/management-restore-postgres-encrypted.sh "$SIGNALFORGE_RESTORE_DATABASE_URL" /path/to/management-YYYYMMDDTHHMMSSZ.dump.age /secure/path/age-identity.txt
+```
+
+The restore helper decrypts to a private temporary directory, validates the archive, and refuses to restore if the target has public-schema objects. It does not create databases or stop services. Keep the target isolated, verify tenant/agent/policy records and agent polling, and only then plan a controlled cutover.
+
+CI creates an ephemeral age identity and PostgreSQL restore database and exercises backup, encryption, restore, data verification, and the non-empty-target guard. This is automated evidence for the script path; operators must still run scheduled off-host drills, test access to the real private key, and record recovery time and recovery point. Never commit a private age identity, database URL, plaintext dump, or backup artifact.
