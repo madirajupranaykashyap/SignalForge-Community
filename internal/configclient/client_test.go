@@ -15,6 +15,9 @@ import (
 	"github.com/madirajupranaykashyap/SignalForge-Community/internal/configcache"
 )
 
+type fixedFetcher struct { config configcache.Config }
+func (f fixedFetcher) FetchConfig(context.Context) (configcache.Config, error) { return f.config, nil }
+
 func testEnvelope() envelope {
 	raw := json.RawMessage(`{"receivers":{"otlp":{}}}`)
 	sum := sha256.Sum256(raw)
@@ -135,4 +138,35 @@ func TestBackoffJitterStaysWithinBounds(t *testing.T) {
 		got := jitter(10 * time.Second)
 		if got < 8*time.Second || got > 12*time.Second { t.Fatalf("jitter = %v", got) }
 	}
+}
+
+func TestRunRestoresCachedConfigBeforePolling(t *testing.T) {
+	envelope := testEnvelope()
+	config := configcache.Config{Version: envelope.Version, SchemaVersion: envelope.SchemaVersion, Digest: envelope.Digest, Config: envelope.Config}
+	cache, err := configcache.New(filepath.Join(t.TempDir(), "active.json"))
+	if err != nil { t.Fatal(err) }
+	if _, err := cache.Refresh(context.Background(), fixedFetcher{config: config}, nil, nil); err != nil { t.Fatal(err) }
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/agents/config":
+			w.Header().Set("Content-Type", "application/json")
+			_ = json.NewEncoder(w).Encode(envelope)
+		case "/api/v1/agents/config/ack":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	fetcher, err := NewFetcher(server.URL+"/api/v1/agents/config", "agent-secret", server.Client())
+	if err != nil { t.Fatal(err) }
+	activations := 0
+	p := &Poller{Fetcher: fetcher, Cache: cache, Interval: time.Hour, Activate: func(context.Context, configcache.Config) error { activations++; return nil }}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	err = p.Run(ctx)
+	if err != context.DeadlineExceeded { t.Fatalf("Run error = %v", err) }
+	if activations != 1 { t.Fatalf("activation count = %d, want startup restore only", activations) }
+	if p.Status().Running { t.Fatal("poller still marked running after exit") }
 }
