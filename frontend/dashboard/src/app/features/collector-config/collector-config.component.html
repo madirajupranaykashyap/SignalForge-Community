@@ -1,0 +1,187 @@
+
+<section class="config-section">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">CUSTOMER ONBOARDING</p>
+      <h2>Collector configuration</h2>
+      <p class="muted">
+        Generate a local-first OpenTelemetry Collector configuration.
+        Raw telemetry is not uploaded by this generator.
+      </p>
+    </div>
+    <span class="status-pill">Local-first</span>
+  </div>
+
+  <div class="config-layout">
+    <div class="settings-panel">
+      <section class="settings-group">
+        <h3><span>01</span> Receiver</h3>
+        <p class="muted">Where your applications send OTLP telemetry.</p>
+
+        <label>
+          Bind address
+          <input
+            type="text"
+            [value]="receiverHost"
+            (input)="onReceiverHostChange($event)"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="field-row">
+          <label>
+            gRPC port
+            <input
+              type="number"
+              [value]="grpcPort"
+              (input)="onGrpcPortChange($event)"
+              min="1"
+              max="65535"
+            />
+          </label>
+
+          <label>
+            HTTP port
+            <input
+              type="number"
+              [value]="httpPort"
+              (input)="onHttpPortChange($event)"
+              min="1"
+              max="65535"
+            />
+          </label>
+        </div>
+        <p class="hint">Loopback is the safer default for local testing.</p>
+      </section>
+
+      <section class="settings-group">
+        <h3><span>02</span> Filtering rules</h3>
+        <p class="muted">
+          Drop a log record when its attribute matches a configured value.
+          Use one rule per line.
+        </p>
+
+        <label>
+          Attribute=value
+          <textarea
+            rows="4"
+            spellcheck="false"
+            [value]="dropRulesText"
+            (input)="onRulesChange($event)"
+            placeholder="http.route=/health"
+          ></textarea>
+        </label>
+        <p class="hint">
+          Example: <code>http.route=/health</code>. Rules are combined with
+          OR semantics: a record matching any rule is dropped.
+        </p>
+      </section>
+
+      <section class="settings-group">
+        <h3><span>03</span> Local archive</h3>
+        <p class="muted">
+          Preserve original log records separately from the filtered pipeline.
+        </p>
+
+        <label>
+          Archive file path
+          <input
+            type="text"
+            [value]="archivePath"
+            (input)="onArchivePathChange($event)"
+            autocomplete="off"
+          />
+        </label>
+        <p class="hint">
+          Ensure the Collector's operating-system user can write to this path
+          and that disk retention is managed.
+        </p>
+      </section>
+
+      <section class="settings-group">
+        <h3><span>04</span> OTLP destination</h3>
+        <label class="toggle-row">
+          <input
+            type="checkbox"
+            [checked]="enableOtlpExport"
+            (change)="onOtlpToggle($event)"
+          />
+          <span>
+            <strong>Enable filtered OTLP export</strong>
+            <small>Send forwarded logs to a remote OTLP gRPC endpoint.</small>
+          </span>
+        </label>
+
+        @if (enableOtlpExport) {
+          <label>
+            OTLP gRPC endpoint
+            <input
+              type="text"
+              [value]="otlpEndpoint"
+              (input)="onOtlpEndpointChange($event)"
+              placeholder="collector.example.com:4317"
+              autocomplete="off"
+            />
+          </label>
+          <p class="hint">
+            TLS is enabled by default. Authentication headers and vendor
+            credentials must be configured separately if required.
+          </p>
+        }
+      </section>
+    </div>
+
+    <div class="preview-panel">
+      <div class="preview-heading">
+        <div>
+          <p class="eyebrow">GENERATED OUTPUT</p>
+          <h3>signalforge-collector.yaml</h3>
+        </div>
+        <span class="line-count">{{ yamlLineCount }} lines</span>
+      </div>
+
+      @if (errors.length > 0) {
+        <div class="validation-errors" role="alert">
+          <strong>Review these settings</strong>
+          <ul>
+            @for (error of errors; track error) {
+              <li>{{ error }}</li>
+            }
+          </ul>
+        </div>
+      }
+
+      <pre class="yaml-preview"><code>{{ yaml }}</code></pre>
+
+      <div class="preview-actions">
+        <button
+          type="button"
+          class="primary-button"
+          [disabled]="errors.length > 0"
+          (click)="downloadYaml()"
+        >
+          Download YAML
+        </button>
+        <button
+          type="button"
+          class="secondary-button"
+          [disabled]="errors.length > 0"
+          (click)="copyYaml()"
+        >
+          {{ copied ? 'Copied' : 'Copy configuration' }}
+        </button>
+      </div>
+
+      <div class="notice">
+        <strong>Before production</strong>
+        <p>
+          This configuration is a starting point, not a deployment guarantee.
+          Validate it against your exact Collector build. Confirm archive
+          permissions, disk capacity, retention, resource limits and destination
+          authentication. The debug exporter is for testing; remove it or
+          replace it with a production exporter when appropriate.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>

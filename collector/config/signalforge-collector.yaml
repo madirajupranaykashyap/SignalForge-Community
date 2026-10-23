@@ -1,0 +1,53 @@
+# SignalForge-generated OpenTelemetry Collector configuration
+# Review this file before deploying it to production.
+# Raw logs are archived locally. Only the filtered pipeline uses the
+# optional OTLP destination.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: "127.0.0.1:4317"
+      http:
+        endpoint: "127.0.0.1:4318"
+
+processors:
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+  batch:
+    timeout: 5s
+  filter/drop-noisy:
+    error_mode: ignore
+    logs:
+      log_record:
+          - "attributes[\"http.route\"] == \"/health\""
+          - "attributes[\"service.name\"] == \"health-check\""
+
+exporters:
+  debug:
+    verbosity: basic
+  file/archive:
+    path: "./data/archive/logs.jsonl"
+    append: true
+    create_directory: true
+  otlp/vendor:
+    endpoint: "otel-vendor.example:4317"
+service:
+  extensions: [health_check]
+  pipelines:
+    # Filtered pipeline: only non-matching records continue to exporters.
+    logs:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, filter/drop-noisy]
+      exporters: [debug, otlp/vendor]
+
+    # Archive pipeline: receives the original records before filtering.
+    logs/archive:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [file/archive]
+
+extensions:
+  health_check:
+    endpoint: "127.0.0.1:13133"

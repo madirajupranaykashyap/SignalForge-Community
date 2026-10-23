@@ -1,0 +1,229 @@
+
+<section class="estimator">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">COST MANAGEMENT</p>
+      <h2>Savings estimator</h2>
+      <p class="muted">
+        Project monthly cost impact using a real benchmark run.
+      </p>
+    </div>
+    <span class="estimate-tag">ESTIMATE ONLY</span>
+  </div>
+
+  <form class="estimator-form" (ngSubmit)="calculate()">
+    <div class="field">
+      <label for="benchmark">Benchmark run</label>
+      <select
+        id="benchmark"
+        name="benchmark"
+        [(ngModel)]="selectedRunId"
+        [disabled]="loadingReports() || reports().length === 0"
+        required>
+        @for (report of reports(); track report.run_id) {
+          <option [value]="report.run_id">
+            {{ report.run_id }} ·
+            {{ report.generated_at_utc | date:'medium' }}
+          </option>
+        }
+      </select>
+      @if (selectedReport; as report) {
+        <small>
+          {{ report.results.log_events_submitted || report.results.records_submitted }}
+          records submitted ·
+          {{ report.results.log_events_filtered || report.results.records_filtered }}
+          filtered
+        </small>
+      }
+    </div>
+
+    <div class="field">
+      <label for="profile">Pricing profile</label>
+      <select
+        id="profile"
+        name="profile"
+        [(ngModel)]="pricingProfile">
+        <option value="linear-gb">Generic per GB</option>
+        <option value="datadog-logs-ingestion">Datadog log ingestion</option>
+      </select>
+      <small>
+        The Datadog profile uses the configured $0.10/GB default.
+        Confirm current vendor pricing before using it for budgeting.
+      </small>
+    </div>
+
+    <div class="field">
+      <label for="price">Price per GB (USD)</label>
+      <input
+        id="price"
+        name="price"
+        type="number"
+        min="0"
+        max="1000000"
+        step="0.01"
+        [(ngModel)]="pricePerGB"
+        required />
+    </div>
+
+    <div class="field">
+      <label for="batches">Benchmark batches per day</label>
+      <input
+        id="batches"
+        name="batches"
+        type="number"
+        min="1"
+        max="1000000"
+        step="1"
+        [(ngModel)]="batchesPerDay"
+        required />
+    </div>
+
+    <div class="field">
+      <label for="days">Days per month</label>
+      <input
+        id="days"
+        name="days"
+        type="number"
+        min="1"
+        max="31"
+        step="1"
+        [(ngModel)]="daysPerMonth"
+        required />
+    </div>
+
+    <div class="field">
+      <label for="eventPrice">Price per million events (USD, optional)</label>
+      <input
+        id="eventPrice"
+        name="eventPrice"
+        type="number"
+        min="0"
+        max="1000000"
+        step="0.01"
+        placeholder="Leave blank to skip indexing estimate"
+        [(ngModel)]="pricePerMillionEvents" />
+      <small>
+        Enter your own rate to estimate indexing costs separately.
+        This rate is not assumed to be an official vendor price.
+      </small>
+    </div>
+
+    <div class="form-actions">
+      <button
+        type="submit"
+        [disabled]="calculating() || loadingReports() || reports().length === 0">
+        {{ calculating() ? 'Calculating…' : 'Calculate savings' }}
+      </button>
+    </div>
+  </form>
+
+  @if (error()) {
+    <p class="error-message" role="alert">{{ error() }}</p>
+  }
+
+  @if (loadingReports()) {
+    <p class="muted">Loading benchmark runs…</p>
+  } @else if (reports().length === 0) {
+    <p class="muted">Run the benchmark script first to generate data.</p>
+  }
+
+  @if (estimate(); as result) {
+    <div class="results">
+      <div class="results-heading">
+        <div>
+          <p class="eyebrow">PROJECTED MONTHLY IMPACT</p>
+          <h3>Cost comparison</h3>
+        </div>
+        <span class="estimate-tag">Not verified billing</span>
+      </div>
+
+      <div class="result-grid">
+        <article class="result-card">
+          <span>Before filtering</span>
+          <strong>{{ formatCurrency(result.monthly.original_cost_usd) }}</strong>
+          <small>
+            {{ formatNumber(result.monthly.original_volume_gb) }} GB estimated
+          </small>
+        </article>
+
+        <article class="result-card">
+          <span>After filtering</span>
+          <strong>{{ formatCurrency(result.monthly.filtered_cost_usd) }}</strong>
+          <small>
+            {{ formatNumber(result.monthly.filtered_volume_gb) }} GB estimated
+          </small>
+        </article>
+
+        <article class="result-card savings-card">
+          <span>Estimated monthly savings</span>
+          <strong>{{ formatCurrency(result.monthly.estimated_savings_usd) }}</strong>
+          <small>
+            {{ formatNumber(result.monthly.savings_percent) }}% estimated reduction
+          </small>
+        </article>
+      </div>
+
+      <div class="comparison">
+        <div class="comparison-row">
+          <span>Original estimated volume</span>
+          <strong>{{ formatNumber(result.monthly.original_volume_gb) }} GB</strong>
+        </div>
+        <div class="comparison-row">
+          <span>Filtered estimated volume</span>
+          <strong>{{ formatNumber(result.monthly.filtered_volume_gb) }} GB</strong>
+        </div>
+        <div class="comparison-row">
+          <span>Estimated volume avoided</span>
+          <strong>{{ formatNumber(result.monthly.estimated_volume_saved_gb) }} GB</strong>
+        </div>
+      </div>
+
+      @if (result.indexing; as indexing) {
+        <div class="indexing-results">
+          <h3>Event-indexing estimate</h3>
+          <div class="result-grid">
+            <article class="result-card">
+              <span>Original indexing cost</span>
+              <strong>{{ formatCurrency(indexing.monthly.original_cost_usd) }}</strong>
+              <small>
+                {{ formatNumber(indexing.monthly.original_indexed_events) }} events
+              </small>
+            </article>
+            <article class="result-card">
+              <span>Filtered indexing cost</span>
+              <strong>{{ formatCurrency(indexing.monthly.filtered_cost_usd) }}</strong>
+              <small>
+                {{ formatNumber(indexing.monthly.filtered_indexed_events) }} events
+              </small>
+            </article>
+            <article class="result-card savings-card">
+              <span>Estimated indexing savings</span>
+              <strong>{{ formatCurrency(indexing.monthly.estimated_savings_usd) }}</strong>
+              <small>
+                {{ formatNumber(indexing.monthly.savings_percent) }}% estimated reduction
+              </small>
+            </article>
+          </div>
+          <p class="disclaimer">{{ indexing.disclaimer }}</p>
+        </div>
+      }
+
+      <div class="estimate-notes">
+        <h3>Assumptions and limitations</h3>
+        <p>{{ result.pricing_note }}</p>
+        <p>{{ result.disclaimer }}</p>
+        @if (result.pricing_source_url) {
+          <a [href]="result.pricing_source_url" target="_blank" rel="noopener noreferrer">
+            View pricing source
+          </a>
+        }
+        <p class="disclaimer">
+          Payload volumes are derived from equivalent OTLP JSON sizes.
+          They are not measured vendor wire traffic or confirmed billing savings.
+          Actual costs depend on vendor pricing, compression, indexing rules,
+          retention, discounts, and other account-specific factors.
+        </p>
+      </div>
+    </div>
+  }
+</section>

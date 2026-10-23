@@ -1,0 +1,354 @@
+
+<div class="app-shell">
+  <aside class="sidebar">
+    <a class="brand" href="#overview" aria-label="SignalForge overview">
+      <span class="brand-mark">S</span>
+      <span class="brand-copy">
+        <strong>SignalForge</strong>
+        <small>TELEMETRY CONTROL</small>
+      </span>
+    </a>
+
+    <div class="workspace-label">WORKSPACE</div>
+
+    <nav class="navigation" aria-label="Main navigation">
+      <a class="nav-item active" href="#overview">
+        <span class="nav-symbol">◫</span>
+        <span>Overview</span>
+      </a>
+      <a class="nav-item" href="#benchmarks">
+        <span class="nav-symbol">▤</span>
+        <span>Benchmarks</span>
+      </a>
+      <span class="nav-item disabled" aria-disabled="true">
+        <span class="nav-symbol">◷</span>
+        <span>Cost estimator</span>
+        <small>SOON</small>
+      </span>
+      <span class="nav-item disabled" aria-disabled="true">
+        <span class="nav-symbol">⚙</span>
+        <span>Settings</span>
+      </span>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="connection-dot"></div>
+      <div>
+        <strong>Community edition</strong>
+        <small>Local control plane</small>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content" id="overview">
+    <header class="topbar">
+      <div class="breadcrumbs">
+        <span>Workspace</span>
+        <span class="breadcrumb-separator">/</span>
+        <strong>Overview</strong>
+      </div>
+
+      <div class="topbar-actions">
+        <span class="environment-badge">
+          <span class="status-dot"></span>
+          Local environment
+        </span>
+        <button class="icon-button" type="button"
+          aria-label="Refresh benchmark data" (click)="refresh()">
+          ↻
+        </button>
+      </div>
+    </header>
+
+    <section class="page-heading">
+      <div>
+        <div class="eyebrow">OBSERVABILITY · COST CONTROL</div>
+        <h1>Telemetry overview</h1>
+        <p>Keep the signal. Cut the spend.</p>
+      </div>
+
+      @if (latest(); as report) {
+        <div class="latest-run">
+          <span class="run-label">LATEST BENCHMARK</span>
+          <code>{{ report.run_id }}</code>
+        </div>
+      }
+    </section>
+
+    @if (status() === 'loading') {
+      <div class="state-panel">
+        <span class="spinner"></span>
+        <strong>Loading benchmark data…</strong>
+        <p>Connecting to the SignalForge control plane.</p>
+      </div>
+    }
+
+    @if (status() === 'error') {
+      <div class="state-panel error-state">
+        <strong>Unable to load benchmarks</strong>
+        <p>{{ errorMessage() }}</p>
+        <button class="primary-button" type="button" (click)="refresh()">
+          Try again
+        </button>
+      </div>
+    }
+
+    @if (status() === 'empty') {
+      <div class="state-panel">
+        <span class="empty-icon">▤</span>
+        <strong>No benchmark reports yet</strong>
+        <p>Run the SignalForge benchmark script to populate this dashboard.</p>
+        <code>./benchmarks/benchmark-savings.sh</code>
+      </div>
+    }
+
+    @if (status() === 'ready' && latest(); as report) {
+      <section class="metric-grid" aria-label="Latest benchmark metrics">
+        <article class="metric-card">
+          <div class="metric-topline">
+            <span class="metric-icon emerald">↘</span>
+            <span class="metric-tag">FILTERING</span>
+          </div>
+          <div class="metric-label">Events filtered</div>
+          <div class="metric-value">
+            {{ formatPercent(filteredPercent(report)) }}
+          </div>
+          <div class="metric-description">
+            {{ formatNumber(filteredCount(report)) }} of
+            {{ formatNumber(eventCount(report)) }} events
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill emerald-fill"
+              [style.width.%]="filteredPercent(report)">
+            </div>
+          </div>
+        </article>
+
+        <article class="metric-card">
+          <div class="metric-topline">
+            <span class="metric-icon blue">⌁</span>
+            <span class="metric-tag">PAYLOAD</span>
+          </div>
+          <div class="metric-label">Payload size reduction</div>
+          <div class="metric-value">
+            {{ formatPercent(payloadReduction(report)) }}
+          </div>
+          <div class="metric-description">Equivalent OTLP JSON size</div>
+          <div class="progress-track">
+            <div class="progress-fill blue-fill"
+              [style.width.%]="payloadReduction(report)">
+            </div>
+          </div>
+        </article>
+
+        <article class="metric-card">
+          <div class="metric-topline">
+            <span class="metric-icon violet">↓</span>
+            <span class="metric-tag">ESTIMATE</span>
+          </div>
+          <div class="metric-label">Estimated bytes avoided</div>
+          <div class="metric-value">
+            {{ formatBytes(bytesSaved(report)) }}
+          </div>
+          <div class="metric-description">Calculated from the benchmark payload comparison</div>
+          <div class="metric-footnote">Not measured vendor wire traffic</div>
+        </article>
+
+        <article class="metric-card">
+          <div class="metric-topline">
+            <span class="metric-icon amber">▣</span>
+            <span class="metric-tag">ARCHIVE</span>
+          </div>
+          <div class="metric-label">Archive completeness</div>
+          <div class="metric-value">
+            {{ formatPercent(archiveCompleteness(report)) }}
+          </div>
+          <div class="metric-description">
+            {{ formatNumber(archivedCount(report)) }} events archived
+          </div>
+          <div class="progress-track">
+            <div class="progress-fill amber-fill"
+              [style.width.%]="archiveCompleteness(report)">
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="content-grid">
+        <article class="panel payload-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Payload comparison</h2>
+              <p>Original versus filtered equivalent JSON size</p>
+            </div>
+            <span class="panel-icon">⌁</span>
+          </div>
+
+          <div class="chart-legend">
+            <span><i class="legend-dot original-dot"></i>Original</span>
+            <span><i class="legend-dot filtered-dot"></i>Filtered</span>
+          </div>
+
+          <div class="bar-chart">
+            <div class="bar-row">
+              <div class="bar-label">
+                <span>Original payload</span>
+                <strong>{{ formatBytes(originalBytes(report)) }}</strong>
+              </div>
+              <div class="bar-track">
+                <div class="chart-bar original-bar"
+                  [style.width.%]="barWidth(originalBytes(report), report)">
+                </div>
+              </div>
+            </div>
+
+            <div class="bar-row">
+              <div class="bar-label">
+                <span>Filtered payload</span>
+                <strong>
+                  {{ formatBytes(filteredBytes(report)) }}
+                </strong>
+              </div>
+              <div class="bar-track">
+                <div class="chart-bar filtered-bar"
+                  [style.width.%]="barWidth(filteredBytes(report), report)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="chart-summary">
+            <div>
+              <span class="summary-indicator"></span>
+              <span>Estimated payload reduction</span>
+            </div>
+            <strong>{{ formatPercent(payloadReduction(report)) }}</strong>
+          </div>
+
+          <p class="disclaimer">
+            Payload sizes are an equivalent OTLP JSON estimate, not measured
+            exporter wire bytes or confirmed vendor billing.
+          </p>
+        </article>
+
+        <article class="panel pipeline-panel">
+          <div class="panel-heading">
+            <div>
+              <h2>Pipeline health</h2>
+              <p>Latest synthetic benchmark run</p>
+            </div>
+            <span class="health-badge">Reported</span>
+          </div>
+
+          <div class="pipeline-step">
+            <div class="pipeline-icon source-icon">1</div>
+            <div class="pipeline-copy">
+              <strong>Records received</strong>
+              <small>Accepted by the collector</small>
+            </div>
+            <strong class="pipeline-count">
+              {{ formatNumber(report.results.records_received!) }}
+            </strong>
+          </div>
+
+          <div class="pipeline-connector"></div>
+
+          <div class="pipeline-step">
+            <div class="pipeline-icon filter-icon">2</div>
+            <div class="pipeline-copy">
+              <strong>Records forwarded</strong>
+              <small>After filtering</small>
+            </div>
+            <strong class="pipeline-count">
+              {{ formatNumber(forwardedCount(report)) }}
+            </strong>
+          </div>
+
+          <div class="pipeline-connector"></div>
+
+          <div class="pipeline-step">
+            <div class="pipeline-icon archive-icon">3</div>
+            <div class="pipeline-copy">
+              <strong>Records archived</strong>
+              <small>Separate archive pipeline</small>
+            </div>
+            <strong class="pipeline-count">
+              {{ formatNumber(archivedCount(report)) }}
+            </strong>
+          </div>
+
+          <div class="pipeline-note">
+            <span>✓</span>
+            Filtering and archive counts are reported separately.
+          </div>
+        </article>
+      </section>
+
+      <section class="panel history-panel" id="benchmarks">
+        <div class="panel-heading history-heading">
+          <div>
+            <h2>Benchmark history</h2>
+            <p>Runs reported by your local control plane</p>
+          </div>
+          <span class="record-count">
+            {{ reports().length }} {{ reports().length === 1 ? 'run' : 'runs' }}
+          </span>
+        </div>
+
+        <div class="table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>Benchmark run</th>
+                <th>Generated</th>
+                <th>Submitted</th>
+                <th>Filtered</th>
+                <th>Forwarded</th>
+                <th>Archived</th>
+                <th>Payload reduction</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (item of reports(); track item.run_id) {
+                <tr>
+                  <td>
+                    <span class="run-id">{{ item.run_id }}</span>
+                  </td>
+                  <td>{{ formatDate(item.generated_at_utc) }}</td>
+                  <td>{{ formatNumber(eventCount(item)) }}</td>
+                  <td>
+                    <span class="filtered-pill">
+                      {{ formatNumber(filteredCount(item)) }}
+                    </span>
+                  </td>
+                  <td>{{ formatNumber(forwardedCount(item)) }}</td>
+                  <td>{{ formatNumber(archivedCount(item)) }}</td>
+                  <td>
+                    <span class="reduction-value">
+                      {{ formatPercent(payloadReduction(item)) }}
+                    </span>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <footer class="table-footer">
+          <span>Data source: SignalForge benchmark reports</span>
+          <button class="text-button" type="button" (click)="refresh()">
+            Refresh data ↻
+          </button>
+        </footer>
+      </section>
+        <app-savings-estimator />
+        <app-collector-config />
+
+    }
+
+    <footer class="page-footer">
+      <span>SignalForge Community</span>
+      <span>Keep the signal. Cut the spend.</span>
+    </footer>
+  </main>
+</div>

@@ -14,6 +14,7 @@ import (
 	debugexporter "go.opentelemetry.io/collector/exporter/debugexporter"
 	otlpexporter "go.opentelemetry.io/collector/exporter/otlpexporter"
 	fileexporter "github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter"
+	healthcheckextension "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension"
 	batchprocessor "go.opentelemetry.io/collector/processor/batchprocessor"
 	memorylimiterprocessor "go.opentelemetry.io/collector/processor/memorylimiterprocessor"
 	filterprocessor "github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor"
@@ -41,11 +42,13 @@ func components() (otelcol.Factories, error) {
 	}
 
 	factories.Extensions, err = otelcol.MakeFactoryMap[extension.Factory](
+		healthcheckextension.NewFactory(),
 	)
 	if err != nil {
 		return otelcol.Factories{}, err
 	}
 	factories.ExtensionModules = makeModulesMap(factories.Extensions, map[component.Type]string{
+		healthcheckextension.NewFactory().Type(): "github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.159.0",
 	})
 
 	factories.Receivers, err = otelcol.MakeFactoryMap[receiver.Factory](

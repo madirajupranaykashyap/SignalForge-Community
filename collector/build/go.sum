@@ -165,10 +165,16 @@ github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding v0.159.0/go.mod h1:otM3uy9Ib170fIu3mHajV9ZEMmbX9XT+6v0BQxfbMtk=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/otlpencodingextension v0.159.0 h1:Y0HVYChomT1KLvVquZ1qSjBjp0CR+q9rn6pThaLWVwk=
 github.com/open-telemetry/opentelemetry-collector-contrib/extension/encoding/otlpencodingextension v0.159.0/go.mod h1:cFolDw37Lj+OQAXR0Ni2iNmsilQl+QAxp4IsZEzhYV4=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.159.0 h1:IXFoitbK+lwdX5Gwiq0MgW0oEWKQH+E3KpWdtlv96+8=
+github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.159.0/go.mod h1:G7SyiB6wP5mt/kiK5Wowh59LhnYhhUJ7U90Pd7RN35E=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.159.0 h1:G4p7IRs31oZRdv/X8/dBwGQq8DQv1Vkt5yS4SU+wk9g=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/common v0.159.0/go.mod h1:5ouNduL0q3gng/mT9dYwFI80EBS5T50JwtXDqtLFyIk=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.159.0 h1:jBIDzmpwM2t3+H8YbVW3ex0l1zBO42yrCNfZpQs+EAQ=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/coreinternal v0.159.0/go.mod h1:MIo6UvOnouNO14chDWK/kaXapjwGHb9U0xk6GegYMvo=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.159.0 h1:c+C2xXYEzSlDsJ3YgW7g2T9i9w0gvx+dF9UprIUeMmg=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/filter v0.159.0/go.mod h1:FQj1HmrQpYoewm1eBaDzyybbXNujBMR72BAvYFGmQDg=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/healthcheck v0.159.0 h1:7qbCYnaLn6bje+BKRkNGOXKY4OCJROSGbO34WfRnj28=
+github.com/open-telemetry/opentelemetry-collector-contrib/internal/healthcheck v0.159.0/go.mod h1:ASd7/pjUxbEM+V4qSnggHVUgKsRaXPwzkBO9/Xygp/g=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.159.0 h1:UohGbvC8VwHANo+XkQaiCp/SOHk2lUnZrhlh6ilurus=
 github.com/open-telemetry/opentelemetry-collector-contrib/internal/sharedcomponent v0.159.0/go.mod h1:yGl0PMHd0OY2gynDHcz02j2Iq+1pqzFTZ5F4hZFXhfk=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/ottl v0.159.0 h1:PB+0S/90C9SN7LyUR76bDVvwrL7DDQ7Q/A4BRDmUkD8=
@@ -177,6 +183,8 @@ github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.159.0
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatatest v0.159.0/go.mod h1:Hc+PQQduHGJKUXXumlIydv2jr07sFN5yIllZDldoMKc=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.159.0 h1:myQAaDpKnfPy/KU9BsBEWPsinvEPI4UFO5Yi2v7RiTU=
 github.com/open-telemetry/opentelemetry-collector-contrib/pkg/pdatautil v0.159.0/go.mod h1:Qzcts6LLXE+jpdEy1LCHL2Ddgit8hw08Ifj3zuYTitw=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status v0.159.0 h1:9IRKl90UJABffnvJlZ3vUYaMv/ODFIyEOkZS+ZDMoSI=
+github.com/open-telemetry/opentelemetry-collector-contrib/pkg/status v0.159.0/go.mod h1:RMX7GR7TyPtrjlQYJngCMGXnofRJuZFeJ97L8pDtsC4=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.159.0 h1:CQimAFKakjtT7n7I5h8/zIpWaIImwaCAkmk3U0Y8V0g=
 github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.159.0/go.mod h1:pIfZpu0kKUwHz2ifyeGjUK0TF/QRTBVCk2Dlhu3oRvo=
 github.com/pierrec/lz4/v4 v4.1.28 h1:pPEPwRJ4kybBTfGt28q7lQsRJQHhC08axprdLD5Ppio=

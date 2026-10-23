@@ -1,0 +1,38 @@
+
+services:
+  signalforge-collector:
+    build:
+      context: ..
+      dockerfile: deploy/collector/Dockerfile
+    image: signalforge-collector:local
+    container_name: signalforge-collector
+    restart: unless-stopped
+
+    command:
+      - --config=/etc/signalforge/collector.yaml
+
+    ports:
+      - "${OTLP_GRPC_BIND:-127.0.0.1}:4317:4317"
+      - "${OTLP_HTTP_BIND:-127.0.0.1}:4318:4318"
+
+    volumes:
+      - ./collector.yaml:/etc/signalforge/collector.yaml:ro
+      - signalforge-archive:/var/lib/signalforge/archive
+
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - -q
+        - -O
+        - /dev/null
+        - http://127.0.0.1:13133/
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+    stop_grace_period: 30s
+
+volumes:
+  signalforge-archive:
