@@ -98,6 +98,44 @@ jobs:
           find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
           exit 1
 
+      - name: Send OTLP trace and metric smoke tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          trace_marker="SIGNALFORGE-CI-TRACE-$(date +%s)"
+          metric_marker="signalforge_ci_metric_$(date +%s)"
+          echo "TRACE_MARKER=$trace_marker" >> "$GITHUB_ENV"
+          echo "METRIC_MARKER=$metric_marker" >> "$GITHUB_ENV"
+
+          trace_payload=$(printf '{"resourceSpans":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"signalforge-ci-smoke"}}]},"scopeSpans":[{"scope":{"name":"signalforge-ci"},"spans":[{"traceId":"0123456789abcdef0123456789abcdef","spanId":"0123456789abcdef","name":"%s","kind":1,"startTimeUnixNano":"1760000000000000000","endTimeUnixNano":"1760000000001000000"}]}]}]}' "$trace_marker")
+          trace_response=$(curl --silent --show-error --output "$RUNNER_TEMP/otlp-traces-response.json" --write-out '%{http_code}' --header 'Content-Type: application/json' --data "$trace_payload" http://127.0.0.1:14318/v1/traces)
+          if [ "$trace_response" != "200" ]; then
+            cat "$RUNNER_TEMP/otlp-traces-response.json"
+            echo "OTLP traces returned HTTP $trace_response (expected 200)."
+            exit 1
+          fi
+
+          metric_payload=$(printf '{"resourceMetrics":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"signalforge-ci-smoke"}}]},"scopeMetrics":[{"scope":{"name":"signalforge-ci"},"metrics":[{"name":"%s","unit":"1","gauge":{"dataPoints":[{"timeUnixNano":"1760000000001000000","asDouble":1.0}]}}]}]}]}' "$metric_marker")
+          metric_response=$(curl --silent --show-error --output "$RUNNER_TEMP/otlp-metrics-response.json" --write-out '%{http_code}' --header 'Content-Type: application/json' --data "$metric_payload" http://127.0.0.1:14318/v1/metrics)
+          if [ "$metric_response" != "200" ]; then
+            cat "$RUNNER_TEMP/otlp-metrics-response.json"
+            echo "OTLP metrics returned HTTP $metric_response (expected 200)."
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if docker logs signalforge-collector-ci 2>&1 | grep -F -- "$trace_marker" >/dev/null \
+              && docker logs signalforge-collector-ci 2>&1 | grep -F -- "$metric_marker" >/dev/null; then
+              echo "Trace and metric payloads reached their debug pipelines."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "OTLP requests were accepted, but debug output markers were not found."
+          docker logs signalforge-collector-ci
+          exit 1
+
       - name: Restart Collector and verify archive persists
         shell: bash
         run: |
