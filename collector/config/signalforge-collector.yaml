@@ -40,13 +40,13 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch, filter/drop-noisy]
-      exporters: [debug, otlp/vendor]
+      exporters: [debug]
 
     # Archive pipeline: receives the original records before filtering.
     logs/archive:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [file/archive]
+      exporters: [file/archive, debug]
 
 extensions:
   health_check:
