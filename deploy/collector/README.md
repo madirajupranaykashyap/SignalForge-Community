@@ -71,9 +71,12 @@ the host firewall and a trusted network. Do not expose OTLP ports to the public
 internet without appropriate network controls and transport security.
 
 The raw archive pipeline writes every received log once. A separate filtered
-pipeline drops configured noisy records from the debug/downstream stream while
-leaving the archive intact. The sample package does not send data to a vendor;
-configure a real destination and credentials before adding an OTLP exporter.
+pipeline drops configured noisy records from the debug/downstream log stream
+while leaving the archive intact. OTLP traces and metrics are also accepted and
+sent to the debug exporter for initial inspection, but they are **not persisted**
+to the log archive. The CI smoke test verifies all three OTLP signal endpoints.
+The sample package does not send data to a vendor; configure a real destination
+and credentials before adding a production OTLP exporter.
 
 ## Upgrade and rollback
 

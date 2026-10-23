@@ -1,6 +1,6 @@
 # SignalForge OpenTelemetry Collector configuration.
-# Archive every incoming log once. The filtered pipeline is for downstream
-# inspection/export and intentionally does not write to the archive.
+# Archive every incoming log once. Traces and metrics are currently accepted
+# and sent to the debug exporter for validation; persistent archives are logs-only.
 
 receivers:
   otlp:
@@ -44,8 +44,20 @@ service:
       processors: [memory_limiter, batch]
       exporters: [file/archive]
 
-    # Filtered stream: suitable for a future vendor exporter or local debug.
+    # Filtered log stream for local inspection or a future destination.
     logs/filtered:
       receivers: [otlp]
       processors: [memory_limiter, filter/drop-noisy, batch]
+      exporters: [debug]
+
+    # Traces and metrics are accepted, processed, and debug-exported.
+    # They are not persisted to the logs-only file archive.
+    traces/inspection:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [debug]
+
+    metrics/inspection:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
       exporters: [debug]
