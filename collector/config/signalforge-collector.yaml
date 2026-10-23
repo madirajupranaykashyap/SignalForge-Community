@@ -29,6 +29,10 @@ connectors:
       signalforge.optimized.log.records:
         description: "Log records remaining after optimization policies."
 exporters:
+  prometheus/optimization:
+    endpoint: "0.0.0.0:9464"
+    namespace: signalforge
+    send_timestamps: true
   debug:
     verbosity: detailed
   file/archive:
@@ -47,14 +51,14 @@ service:
       exporters: [file/archive, count/input]
     metrics/optimization-input:
       receivers: [count/input]
-      exporters: [debug]
+      exporters: [prometheus/optimization, debug]
     logs/optimized:
       receivers: [otlp]
       processors: [memory_limiter, filter/optimization, batch]
       exporters: [debug, count/optimized]
     metrics/optimization-output:
       receivers: [count/optimized]
-      exporters: [debug]
+      exporters: [prometheus/optimization, debug]
     traces/inspection:
       receivers: [otlp]
       processors: [memory_limiter, batch]
