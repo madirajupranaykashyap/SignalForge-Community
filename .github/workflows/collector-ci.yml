@@ -44,6 +44,7 @@ jobs:
             --name signalforge-collector-ci \
             --publish 127.0.0.1:14318:4318 \
             --publish 127.0.0.1:19464:9464 \
+            --publish 127.0.0.1:19464:9464 \
             --volume "$RUNNER_TEMP/signalforge-archive:/var/lib/signalforge/archive" \
             signalforge-collector:ci
 
@@ -189,6 +190,19 @@ jobs:
             exit 1
           fi
           echo "Prometheus endpoint exposes both optimization count metrics."
+
+      - name: Verify Prometheus optimization metrics endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:19464/metrics > "$RUNNER_TEMP/prometheus-metrics.txt"; then
+              break
+            fi
+            sleep 1
+          done
+          grep -F 'signalforge_input_log_records' "$RUNNER_TEMP/prometheus-metrics.txt"
+          grep -F 'signalforge_optimized_log_records' "$RUNNER_TEMP/prometheus-metrics.txt"
 
       - name: Send OTLP trace and metric smoke tests
         shell: bash
