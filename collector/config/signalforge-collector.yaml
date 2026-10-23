@@ -1,4 +1,4 @@
-# SignalForge Collector: raw log archive, optimized stream, and measurement counts.
+# SignalForge Collector: raw archive, configurable optimized stream, and counts.
 receivers:
   otlp:
     protocols:
@@ -16,9 +16,9 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        - 'severity_text == "DEBUG"'
-        - 'attributes["http.route"] == "/health"'
-        - 'attributes["service.name"] == "health-check"'
+        - 'severity_text == "${env:SIGNALFORGE_DROP_SEVERITY}"'
+        - 'attributes["http.route"] == "${env:SIGNALFORGE_HEALTH_ROUTE}"'
+        - 'attributes["service.name"] == "${env:SIGNALFORGE_HEALTH_SERVICE}"'
 connectors:
   count/input:
     logs:
@@ -39,6 +39,10 @@ exporters:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
     create_directory: true
+  file/optimized:
+    path: /var/lib/signalforge/archive/optimized.jsonl
+    append: true
+    create_directory: true
 extensions:
   health_check:
     endpoint: "127.0.0.1:13133"
@@ -55,7 +59,7 @@ service:
     logs/optimized:
       receivers: [otlp]
       processors: [memory_limiter, filter/optimization, batch]
-      exporters: [debug, count/optimized]
+      exporters: [debug, count/optimized, file/optimized]
     metrics/optimization-output:
       receivers: [count/optimized]
       exporters: [prometheus/optimization, debug]

@@ -28,13 +28,16 @@ The default ports bind to loopback only:
 - OTLP/gRPC: `127.0.0.1:4317`
 - OTLP/HTTP: `127.0.0.1:4318`
 
-The active archive is `deploy/collector/archive/logs.jsonl`. The Collector
-currently appends to this single file so that data survives Collector restarts.
-Automatic file rotation is deliberately not enabled: the upstream file exporter
-does not support `append: true` together with rotation, and disabling append
-can truncate the active file when the Collector restarts. Until a restart-safe
-rotation mechanism is implemented, monitor disk usage and use an external
-archive/retention process that is designed for an actively written file.
+The raw archive is `archive/logs.jsonl`; the optimized downstream stream is
+also written to `archive/optimized.jsonl` so record and byte trends can be
+compared. Both files use append mode for restart durability. Do not configure
+the upstream file exporter to rotate these files itself. Use the supplied
+`scripts/archive-rotate.sh` helper, which stops the Collector before moving
+the active files, restarts it to reopen fresh files, compresses rotated files,
+and prunes compressed archives by age. Defaults are 256 MiB per active file
+and 14 days of compressed retention. Run it from a scheduled job (for example,
+a systemd timer) and monitor free disk space; rotation is not automatically
+scheduled by Compose.
 
 The volume uses Podman's `:Z` SELinux label. If your Compose implementation
 does not support this suffix, use a compatible Podman Compose version or
@@ -70,15 +73,12 @@ To receive telemetry from another host, set `OTLP_GRPC_BIND` and/or
 the host firewall and a trusted network. Do not expose OTLP ports to the public
 internet without appropriate network controls and transport security.
 
-The raw archive pipeline writes every received log once, before optimization.
-The optimized downstream log pipeline currently drops `DEBUG` records and
-known health-check noise using deterministic rules; accepted records are sent to
-the debug exporter. This is the first policy-driven optimization baseline, not
-yet adaptive sampling or a claim of production cost savings. CI verifies that
-DEBUG records are excluded from the downstream output while both DEBUG and INFO
-records remain in the raw archive. Traces and metrics are accepted and sent to
-the debug exporter for inspection, but are **not persisted** to the log archive.
-The sample package does not send data to a vendor.
+The raw archive pipeline writes every received log before optimization. The
+optimized stream applies deterministic environment-configured equality rules
+and writes accepted records to both the debug exporter and
+`archive/optimized.jsonl`. Traces and metrics are accepted by inspection
+pipelines and sent to the debug exporter; they are **not persisted** to these
+log archives. The sample package does not send data to a vendor.
 
 ## Upgrade and rollback
 
@@ -102,22 +102,24 @@ the rollback target because it moves.
 
 ## Archive retention and backup
 
-The active archive is newline-delimited JSON and currently grows without
-automatic rotation. Monitor disk usage and copy important archives off-host.
-Stop or quiesce the collector before making a file-level backup to avoid
-capturing a partially written final line. Back up the entire archive directory.
-Do not configure the upstream file exporter with rotation while `append: true`
-is required for restart durability. For example:
+Run the rotation helper from a scheduler appropriate to your host. It rotates
+both raw and optimized streams only after either active file reaches the size
+threshold, stops the Collector before moving active files, starts it so the
+append-mode exporters reopen new files, compresses the closed files, and removes
+compressed archives older than the retention window.
 
 ```bash
-podman-compose -f compose.yaml stop collector
-tar -czf signalforge-archive-$(date +%F).tar.gz archive
-podman-compose -f compose.yaml start collector
+ARCHIVE_MAX_MB=256 ARCHIVE_RETENTION_DAYS=14 scripts/archive-rotate.sh
 ```
 
-Store backups off the host and test restoring them. Do not delete or rotate the
-active file while the collector is writing to it unless you have configured
-and verified a rotation strategy.
+Set `ARCHIVE_DIR` if your archive volume is mounted elsewhere. The script
+expects `podman-compose` and the deployment's `compose.yaml`; override
+`COMPOSE_CMD` or `COMPOSE_FILE` when your environment uses a different
+compatible command/path. It is safe to run periodically: below the threshold it
+does not stop the Collector. Rotation itself is not scheduled automatically.
+Monitor free disk space and schedule backups separately. For a consistent
+backup, stop or quiesce the Collector, copy the whole archive directory, and
+test restoration.
 
 ## Isolated test on Rocky Linux
 
@@ -127,9 +129,10 @@ directory and environment file, set a unique container name, non-conflicting
 ports, and a separate archive directory:
 
 ```bash
-mkdir -p ~/signalforge-test/archive
+mkdir -p ~/signalforge-test/archive ~/signalforge-test/metrics
 cd ~/signalforge-test
 cp /path/to/SignalForge-Community/deploy/collector/compose.yaml .
+cp /path/to/SignalForge-Community/deploy/collector/metrics/archive_metrics.py ./metrics/
 cat > .env <<'EOF'
 COLLECTOR_IMAGE=ghcr.io/madirajupranaykashyap/signalforge-collector:latest
 COLLECTOR_CONTAINER_NAME=signalforge-collector-test
@@ -165,13 +168,15 @@ settings above.
 
 ## Optimization measurements
 
-The Collector emits separate count metrics for logs entering the raw archive
-(`signalforge.input.log.records`) and logs remaining after optimization
-(`signalforge.optimized.log.records`). These support record-reduction
-calculations, but do not yet estimate bytes saved, processing overhead, or
-monetary savings. The Collector also exposes these counters through the Prometheus endpoint
-described below. Recording rules for rate and record-reduction analytics are
-provided in `prometheus/recording-rules.yml`.
+The Collector emits separate input and optimized record counters. The
+`archive-metrics` sidecar exposes active-file byte gauges and incremental line
+counters at `http://127.0.0.1:9465/metrics` (host port configurable with
+`ARCHIVE_METRICS_PORT`). It reports raw and optimized archive file sizes and
+record counts. These are operational measurements, not a full cost model:
+file bytes do not include network, storage compression, backend indexing, or
+retention costs, and Collector CPU/latency overhead is not measured yet.
+Recording rules for Collector record rates and record reduction remain in
+`prometheus/recording-rules.yml`.
 
 
 ## Prometheus optimization metrics
@@ -258,3 +263,60 @@ recording/alerting rule syntax, and dashboard JSON structure, in addition to the
 existing Collector build and ingestion smoke tests. Live Grafana rendering and
 production alert routing still need to be verified in the target environment.
 
+
+
+## Phases 12–16: operating the Collector safely
+
+### Configurable policy
+
+Set these values in `.env` before starting the stack:
+
+- `SIGNALFORGE_DROP_SEVERITY` (default `DEBUG`)
+- `SIGNALFORGE_HEALTH_ROUTE` (default `/health`)
+- `SIGNALFORGE_HEALTH_SERVICE` (default `health-check`)
+
+Each value is used by one exact-match filter condition. To disable one equality
+condition, set its value to `__disabled__` (provided that sentinel is not a
+real value in your telemetry). These are simple equality rules, not arbitrary
+user-supplied expressions. Review policy changes in a test deployment before
+promoting them; the raw archive intentionally retains records dropped from the
+optimized stream. Restart/recreate the Collector after changing environment
+values. Keep a record of the policy values used for each deployment.
+
+### Archive metrics
+
+Prometheus can scrape the archive sidecar separately from the Collector:
+`127.0.0.1:9465/metrics` by default. Useful series:
+
+- `signalforge_archive_file_bytes{stream="raw|optimized"}`
+- `signalforge_archive_file_present{stream="raw|optimized"}`
+- `signalforge_archive_records_total{stream="raw|optimized"}`
+
+The sidecar reads the active files incrementally and detects file replacement,
+truncation, and missing files. Its record counters describe the current active
+file and reset when the file rotates; use them as active-file diagnostics, not
+as a lifetime total. Restrict the endpoint to a trusted monitoring network.
+Do not infer monetary savings from file-size differences alone.
+
+### Reliability and security checklist
+
+- Keep OTLP and both metrics ports loopback-bound unless you intentionally
+  configure a protected LAN path and firewall rules.
+- Pin the Collector image to a release tag or digest in production; do not rely
+  on a moving `latest` tag for reproducible rollback.
+- Keep the container non-root and preserve the health check and graceful
+  shutdown period. Verify archive persistence after a restart.
+- Test low disk space, unavailable downstream exporters, and abrupt host
+  shutdown in a disposable environment before production use. A disk-full event
+  can still cause archive writes to fail; alert on disk utilization and archive
+  health at the host level.
+- Back up both raw and optimized archives, and test restore procedures.
+
+### Integration coverage and current limitations
+
+CI exercises OTLP/HTTP ingestion for logs, traces, and metrics; raw archive
+persistence; DEBUG filtering; optimized output; archive metric calculations;
+and Prometheus rule/dashboard validation. Traces and metrics still go to the
+debug exporter only. This phase does not add vendor exporters, adaptive
+sampling, a monetary cost model, Collector CPU/latency profiling, or automated
+rotation scheduling. Those remain separate future work.

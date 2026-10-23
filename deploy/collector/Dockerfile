@@ -1,4 +1,3 @@
-
 FROM golang:1.27.3 AS builder
 
 WORKDIR /src
@@ -20,13 +19,15 @@ RUN apk add --no-cache ca-certificates wget \
     && chown -R signalforge:signalforge /var/lib/signalforge
 
 COPY --from=builder /out/signalforge-collector /usr/local/bin/signalforge-collector
-
-# Include the Collector configuration in the image.
 COPY collector/config/signalforge-collector.yaml /etc/signalforge/collector.yml
+
+ENV SIGNALFORGE_DROP_SEVERITY=DEBUG \
+    SIGNALFORGE_HEALTH_ROUTE=/health \
+    SIGNALFORGE_HEALTH_SERVICE=health-check
 
 USER signalforge
 
-EXPOSE 4317 4318
+EXPOSE 4317 4318 9464
 
 ENTRYPOINT ["/usr/local/bin/signalforge-collector"]
 CMD ["--config=/etc/signalforge/collector.yml"]
