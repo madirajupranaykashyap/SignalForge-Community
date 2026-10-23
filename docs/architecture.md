@@ -25,3 +25,13 @@ The pipeline branches into:
 Prove that the Collector receives telemetry, applies a reduction policy, delivers the expected output, and provides measurable evidence of the result.
 
 Do not introduce the SaaS control plane until the data-plane behavior is demonstrated.
+
+
+## Phase 5: optimization effectiveness measurements
+
+Separate count connectors emit `signalforge.input.log.records` for the archive
+branch and `signalforge.optimized.log.records` for the post-policy branch.
+These counters support record-reduction calculations without treating debug
+log text as a metric. Byte savings, processing overhead, and cost savings are
+not yet measured. The counters currently flow through the debug exporter and
+are not exposed through a dedicated Prometheus endpoint or remote backend.
