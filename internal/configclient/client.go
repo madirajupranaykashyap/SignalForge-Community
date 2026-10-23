@@ -62,6 +62,10 @@ func NewFetcher(endpoint, credential string, client *http.Client) (*Fetcher, err
 	}
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
+	} else if client.Timeout <= 0 {
+		copy := *client
+		copy.Timeout = 10 * time.Second
+		client = &copy
 	}
 	endpoint = strings.TrimRight(endpoint, "/")
 	ackEndpoint := strings.TrimSuffix(endpoint, "/config") + "/config/ack"
