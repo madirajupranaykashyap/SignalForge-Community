@@ -1,7 +1,6 @@
-# SignalForge-generated OpenTelemetry Collector configuration
-# Review this file before deploying it to production.
-# Raw logs are archived locally. Only the filtered pipeline uses the
-# optional OTLP destination.
+# SignalForge OpenTelemetry Collector configuration.
+# Archive every incoming log once. The filtered pipeline is for downstream
+# inspection/export and intentionally does not write to the archive.
 
 receivers:
   otlp:
@@ -21,43 +20,32 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-          - "attributes[\"http.route\"] == \"/health\""
-          - "attributes[\"service.name\"] == \"health-check\""
+        - 'attributes["http.route"] == "/health"'
+        - 'attributes["service.name"] == "health-check"'
 
 exporters:
   debug:
-    verbosity: detailed
+    verbosity: basic
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
     create_directory: true
-  otlp/vendor:
-    endpoint: "otel-vendor.example:4317"
-service:
-  telemetry:
-    logs:
-      level: debug
-    metrics:
-      readers:
-        - pull:
-            exporter:
-              prometheus:
-                host: 0.0.0.0
-                port: 8888
-  extensions: [health_check]
-  pipelines:
-    # Filtered pipeline: only non-matching records continue to exporters.
-    logs:
-      receivers: [otlp]
-      processors: [memory_limiter, filter/drop-noisy]
-      exporters: [debug, file/archive]
-
-    # Archive pipeline: receives the original records before filtering.
-    logs/archive:
-      receivers: [otlp]
-      processors: [memory_limiter]
-      exporters: [file/archive, debug]
 
 extensions:
   health_check:
     endpoint: "127.0.0.1:13133"
+
+service:
+  extensions: [health_check]
+  pipelines:
+    # Raw archive: all received logs are persisted once, before filtering.
+    logs/archive:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [file/archive]
+
+    # Filtered stream: suitable for a future vendor exporter or local debug.
+    logs/filtered:
+      receivers: [otlp]
+      processors: [memory_limiter, filter/drop-noisy, batch]
+      exporters: [debug]
