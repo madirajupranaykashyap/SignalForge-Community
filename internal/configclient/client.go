@@ -178,8 +178,8 @@ func truncate(s string, max int) string {
 	return s
 }
 
-type Validator func(schemaVersion string, payload json.RawMessage) error
-type Activator func(context.Context, configcache.Config) error
+type Validator = configcache.Validator
+type Activator = configcache.Activator
 
 type Status struct {
 	LastPoll time.Time `json:"last_poll,omitempty"`
