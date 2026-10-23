@@ -23,7 +23,7 @@ func makeConfig(version int, payload string) Config {
 func TestRefreshPersistsAndRestoresLastKnownGood(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "cache", "active.json")
 	s, err := New(path); if err != nil { t.Fatal(err) }
-	c := makeConfig(1, "{\"processors\":{\"batch\":{}}}")
+	c := makeConfig(1, "{ \"processors\" : { \"batch\" : {} } }")
 	changed, err := s.Refresh(context.Background(), fakeFetcher{config:c}, func(schema string, raw json.RawMessage) error {
 		if schema != "1" || !json.Valid(raw) { t.Fatal("unexpected validator input") }; return nil
 	}, func(_ context.Context, got Config) error {
