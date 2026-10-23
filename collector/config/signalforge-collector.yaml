@@ -34,12 +34,22 @@ exporters:
   otlp/vendor:
     endpoint: "otel-vendor.example:4317"
 service:
+  telemetry:
+    logs:
+      level: debug
+    metrics:
+      readers:
+        - pull:
+            exporter:
+              prometheus:
+                host: 0.0.0.0
+                port: 8888
   extensions: [health_check]
   pipelines:
     # Filtered pipeline: only non-matching records continue to exporters.
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch, filter/drop-noisy]
+      processors: [memory_limiter, filter/drop-noisy]
       exporters: [debug, file/archive]
 
     # Archive pipeline: receives the original records before filtering.
