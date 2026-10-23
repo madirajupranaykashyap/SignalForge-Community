@@ -1,0 +1,38 @@
+# SignalForge Collector operational alerts.
+#
+# The scrape job label must match the job_name configured in Prometheus.
+groups:
+  - name: signalforge-collector-health
+    interval: 30s
+    rules:
+      - alert: SignalForgeCollectorScrapeMissing
+        expr: up{job="signalforge-collector"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SignalForge Collector metrics endpoint is unavailable"
+          description: "Prometheus cannot scrape the SignalForge Collector for at least 2 minutes. Check the Collector process, network path, and metrics endpoint."
+
+      - alert: SignalForgeNoInputLogRecords
+        expr: |
+          (up{job="signalforge-collector"} == 1)
+          unless on (job, instance) signalforge_input_log_records
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SignalForge has not reported input log records"
+          description: "The Collector is scrapeable, but the input log-record counter is absent for 10 minutes. Confirm that telemetry is being sent; this may be expected for an idle deployment."
+
+  - name: signalforge-optimization-health
+    interval: 30s
+    rules:
+      - alert: SignalForgeNegativeRecordReduction
+        expr: signalforge:log_record_reduction_percent:rate5m < 0
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SignalForge optimized throughput exceeds input throughput"
+          description: "The five-minute optimized record rate exceeds the input record rate for 10 minutes. Check scrape coverage, counter resets, and pipeline topology; this is not evidence of savings."
