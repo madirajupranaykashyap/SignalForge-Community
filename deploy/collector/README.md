@@ -28,10 +28,15 @@ The default ports bind to loopback only:
 - OTLP/gRPC: `127.0.0.1:4317`
 - OTLP/HTTP: `127.0.0.1:4318`
 
-The archive is written to `deploy/collector/archive/logs.jsonl`. The volume
-uses Podman's `:Z` SELinux label. If your Compose implementation does not
-support this suffix, use a compatible Podman Compose version or configure the
-host SELinux label explicitly.
+The active archive is `deploy/collector/archive/logs.jsonl`. The file exporter
+rotates it at approximately 100 MiB and keeps up to 10 rotated files, pruning
+rotated files older than 7 days. Rotated files have timestamps in their names;
+back up the entire archive directory, not only `logs.jsonl`. Actual disk use
+depends on ingestion volume and file sizes.
+
+The volume uses Podman's `:Z` SELinux label. If your Compose implementation
+does not support this suffix, use a compatible Podman Compose version or
+configure the host SELinux label explicitly.
 
 ## Verify ingestion
 
@@ -90,11 +95,13 @@ the rollback target because it moves.
 
 ## Archive retention and backup
 
-The archive is append-only JSON Lines in the configured host directory. It can
-grow indefinitely; monitor disk usage and define a retention policy before
-collecting high-volume telemetry. Stop or quiesce the collector before making
-a simple file-level backup to avoid capturing a partially written final line.
-For example:
+The active archive is newline-delimited JSON. Size-based rotation creates
+timestamped archive files; the configured policy keeps up to 10 rotated files
+and prunes rotated files older than 7 days. This is a bounded local retention
+policy, not a backup strategy. Monitor disk usage and copy important archives
+off-host. Stop or quiesce the collector before making a file-level backup to
+avoid capturing a partially written final line. Back up the whole archive
+directory, including rotated files. For example:
 
 ```bash
 podman-compose -f compose.yaml stop collector
