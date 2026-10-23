@@ -3,12 +3,12 @@ name: signalforge
 services:
   collector:
     image: ${COLLECTOR_IMAGE:-ghcr.io/madirajupranaykashyap/signalforge-collector:latest}
-    container_name: signalforge-collector
+    container_name: ${COLLECTOR_CONTAINER_NAME:-signalforge-collector}
     restart: unless-stopped
     pull_policy: always
     ports:
-      - "${OTLP_GRPC_BIND:-127.0.0.1}:4317:4317"
-      - "${OTLP_HTTP_BIND:-127.0.0.1}:4318:4318"
+      - "${OTLP_GRPC_BIND:-127.0.0.1}:${OTLP_GRPC_PORT:-4317}:4317"
+      - "${OTLP_HTTP_BIND:-127.0.0.1}:${OTLP_HTTP_PORT:-4318}:4318"
     volumes:
       - "${ARCHIVE_DIR:-./archive}:/var/lib/signalforge/archive:Z"
     healthcheck:
