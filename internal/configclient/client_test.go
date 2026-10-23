@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -79,15 +80,16 @@ func TestPollerFetchesValidatesActivatesAndAcknowledges(t *testing.T) {
 
 func TestRejectedConfigIsNotCachedAndIsAcknowledged(t *testing.T) {
 	var ackApplied bool
+	var ackMessage string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/agents/config":
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(testEnvelope())
 		case "/api/v1/agents/config/ack":
-			var q struct { Applied bool `json:"applied"` }
+			var q struct { Applied bool `json:"applied"`; Message string `json:"message"` }
 			_ = json.NewDecoder(r.Body).Decode(&q)
-			ackApplied = q.Applied
+			ackApplied, ackMessage = q.Applied, q.Message
 			w.WriteHeader(http.StatusNoContent)
 		default: http.NotFound(w, r)
 		}
@@ -97,11 +99,12 @@ func TestRejectedConfigIsNotCachedAndIsAcknowledged(t *testing.T) {
 	if err != nil { t.Fatal(err) }
 	cache, err := configcache.New(filepath.Join(t.TempDir(), "active.json"))
 	if err != nil { t.Fatal(err) }
-	p := &Poller{Fetcher:fetcher, Cache:cache, Validate:func(string, json.RawMessage) error { return context.DeadlineExceeded }}
+	p := &Poller{Fetcher:fetcher, Cache:cache, Validate:func(string, json.RawMessage) error { return errors.New("secret config value should never be exposed") }}
 	if err := p.pollOnce(context.Background()); err == nil { t.Fatal("expected validation failure") }
 	if _, ok := cache.Active(); ok { t.Fatal("rejected config was cached") }
 	if ackApplied { t.Fatal("rejected config acknowledged as applied") }
-	if !strings.Contains(p.Status().LastError, "invalid") { t.Fatalf("unexpected status error: %q", p.Status().LastError) }
+	if !strings.Contains(p.Status().LastError, "rejected") { t.Fatalf("unexpected status error: %q", p.Status().LastError) }
+	if strings.Contains(p.Status().LastError, "secret") || strings.Contains(ackMessage, "secret") { t.Fatal("configuration details leaked through status or acknowledgement") }
 }
 
 func TestNoAssignmentIsSuccessfulPollWithoutAcknowledgement(t *testing.T) {
