@@ -30,16 +30,15 @@ See `docs/architecture.md` for the architecture and development plan.
 
 Community components are licensed under Apache License 2.0. Check each component's license and third-party notices before redistribution.
 
-
 The initial optimization measurement baseline emits separate input and
 post-policy log-record count metrics. It does not yet claim byte or monetary
 savings.
 
-
 The Collector exposes input and post-optimization log count metrics through a
 loopback-bound Prometheus endpoint by default; see the deployment guide.
 
-
 ## Control plane roadmap
 
-Phase 17 defines the trust boundaries in [the control-plane foundation design](docs/control-plane-foundation.md). A single-process management API reference is documented in [docs/management-api.md](docs/management-api.md). It demonstrates enrollment tokens, agent credentials, heartbeats, policy versioning, acknowledgements, and revocation; it is not production-ready until tenant-user OIDC/RBAC, transactional persistence, Collector-side schema validation, and last-known-good configuration caching are implemented.
+Phase 17 defines trust boundaries in [the control-plane foundation design](docs/control-plane-foundation.md). A single-process management API reference is documented in [docs/management-api.md](docs/management-api.md). It demonstrates enrollment tokens, agent credentials, heartbeats, policy versioning, acknowledgements, and revocation; it is not production-ready until tenant-user OIDC/RBAC and transactional persistence are implemented.
+
+Phase 18 adds a transport-neutral last-known-good configuration cache foundation in [docs/config-cache.md](docs/config-cache.md), including digest checks, schema-validator hooks, atomic cache replacement, and restart restore tests. It is not yet wired to a live Collector pipeline or control-plane poller; those integration tests remain release gates.
