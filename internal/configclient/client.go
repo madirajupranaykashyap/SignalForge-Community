@@ -61,12 +61,17 @@ func NewFetcher(endpoint, credential string, client *http.Client) (*Fetcher, err
 		return nil, errors.New("config endpoint path must end in /api/v1/agents/config")
 	}
 	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	} else if client.Timeout <= 0 {
-		copy := *client
-		copy.Timeout = 10 * time.Second
-		client = &copy
+		client = &http.Client{}
 	}
+	clientCopy := *client
+	if clientCopy.Timeout <= 0 {
+		clientCopy.Timeout = 10 * time.Second
+	}
+	// Never forward an agent bearer credential through an HTTP redirect.
+	clientCopy.CheckRedirect = func(_ *http.Request, _ []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	client = &clientCopy
 	endpoint = strings.TrimRight(endpoint, "/")
 	ackEndpoint := strings.TrimSuffix(endpoint, "/config") + "/config/ack"
 	return &Fetcher{endpoint: endpoint, ackEndpoint: ackEndpoint, credential: credential, httpClient: client}, nil
