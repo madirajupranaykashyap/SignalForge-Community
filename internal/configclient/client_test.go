@@ -173,3 +173,17 @@ func TestRunRestoresCachedConfigBeforePolling(t *testing.T) {
 	if activations != 1 { t.Fatalf("activation count = %d, want startup restore only", activations) }
 	if p.Status().Running { t.Fatal("poller still marked running after exit") }
 }
+
+func TestFetcherDoesNotFollowRedirects(t *testing.T) {
+	targetHits := 0
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { targetHits++; w.WriteHeader(http.StatusOK) }))
+	defer target.Close()
+	source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.URL+"/api/v1/agents/config", http.StatusFound)
+	}))
+	defer source.Close()
+	fetcher, err := NewFetcher(source.URL+"/api/v1/agents/config", "agent-secret", source.Client())
+	if err != nil { t.Fatal(err) }
+	if _, err := fetcher.FetchConfig(context.Background()); err == nil { t.Fatal("redirect response unexpectedly accepted") }
+	if targetHits != 0 { t.Fatalf("redirect target received %d requests", targetHits) }
+}
