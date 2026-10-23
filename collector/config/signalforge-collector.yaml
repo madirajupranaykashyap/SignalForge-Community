@@ -45,7 +45,7 @@ service:
     # Archive pipeline: receives the original records before filtering.
     logs/archive:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
+      processors: [memory_limiter]
       exporters: [file/archive, debug]
 
 extensions:
