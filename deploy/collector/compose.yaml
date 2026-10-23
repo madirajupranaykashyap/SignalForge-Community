@@ -1,0 +1,20 @@
+name: signalforge
+
+services:
+  collector:
+    image: ${COLLECTOR_IMAGE:-ghcr.io/madirajupranaykashyap/signalforge-collector:latest}
+    container_name: signalforge-collector
+    restart: unless-stopped
+    pull_policy: always
+    ports:
+      - "${OTLP_GRPC_BIND:-127.0.0.1}:4317:4317"
+      - "${OTLP_HTTP_BIND:-127.0.0.1}:4318:4318"
+    volumes:
+      - "${ARCHIVE_DIR:-./archive}:/var/lib/signalforge/archive:Z"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:13133/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    stop_grace_period: 30s
