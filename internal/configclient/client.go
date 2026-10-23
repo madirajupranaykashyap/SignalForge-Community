@@ -25,6 +25,9 @@ var ErrNoAssignment = errors.New("no configuration is assigned to this agent")
 const maxResponseBytes = 4 << 20
 
 type envelope struct {
+	TenantID string `json:"tenant_id,omitempty"`
+	CreatedAt time.Time `json:"created_at,omitempty"`
+	ConfigVersion int `json:"config_version,omitempty"`
 	Version int             `json:"version"`
 	SchemaVersion string   `json:"schema_version"`
 	Digest string          `json:"digest"`
@@ -106,6 +109,10 @@ func (f *Fetcher) FetchConfig(ctx context.Context) (configcache.Config, error) {
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&e); err != nil {
 		return configcache.Config{}, fmt.Errorf("decode config response: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		return configcache.Config{}, errors.New("config response must contain exactly one JSON object")
 	}
 	if len(e.Config) == 0 || bytes.Equal(bytes.TrimSpace(e.Config), []byte("null")) {
 		return configcache.Config{}, ErrNoAssignment
