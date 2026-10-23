@@ -70,13 +70,15 @@ To receive telemetry from another host, set `OTLP_GRPC_BIND` and/or
 the host firewall and a trusted network. Do not expose OTLP ports to the public
 internet without appropriate network controls and transport security.
 
-The raw archive pipeline writes every received log once. A separate filtered
-pipeline drops configured noisy records from the debug/downstream log stream
-while leaving the archive intact. OTLP traces and metrics are also accepted and
-sent to the debug exporter for initial inspection, but they are **not persisted**
-to the log archive. The CI smoke test verifies all three OTLP signal endpoints.
-The sample package does not send data to a vendor; configure a real destination
-and credentials before adding a production OTLP exporter.
+The raw archive pipeline writes every received log once, before optimization.
+The optimized downstream log pipeline currently drops `DEBUG` records and
+known health-check noise using deterministic rules; accepted records are sent to
+the debug exporter. This is the first policy-driven optimization baseline, not
+yet adaptive sampling or a claim of production cost savings. CI verifies that
+DEBUG records are excluded from the downstream output while both DEBUG and INFO
+records remain in the raw archive. Traces and metrics are accepted and sent to
+the debug exporter for inspection, but are **not persisted** to the log archive.
+The sample package does not send data to a vendor.
 
 ## Upgrade and rollback
 
