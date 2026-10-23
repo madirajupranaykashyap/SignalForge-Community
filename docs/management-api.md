@@ -6,7 +6,7 @@ Run with `go run ./cmd/management`. The service defaults to `127.0.0.1:8081`.
 
 - `SIGNALFORGE_ADMIN_TOKEN`: required; at least 32 characters.
 - `SIGNALFORGE_MANAGEMENT_ADDR`: listen address, loopback by default.
-- `SIGNALFORGE_MANAGEMENT_STATE`: state file; defaults to `data/management-state.json`.
+- `SIGNALFORGE_MANAGEMENT_DB`: SQLite database path; defaults to `data/management.db`. The directory is created with restrictive permissions. Use a persistent local filesystem volume; do not place SQLite WAL databases on NFS or shared network filesystems.
 - `SIGNALFORGE_OIDC_ISSUER`, `SIGNALFORGE_OIDC_AUDIENCE`, and `SIGNALFORGE_OIDC_JWKS_URL`: configure tenant-user authentication. If any is set, all must be valid or startup fails.
 - `SIGNALFORGE_OIDC_TENANT_CLAIM`: optional tenant claim name; defaults to `tenant_id`.
 - `SIGNALFORGE_OIDC_ROLES_CLAIM`: optional role claim name; defaults to `roles`.
@@ -40,4 +40,4 @@ These endpoints use the one-time credential returned at enrollment:
 
 ## Maturity and release gates
 
-This remains a single-process reference implementation, not a production SaaS identity system. JSON persistence is not suitable for multiple replicas or independent processes. OIDC role and tenant claims require provider-specific mapping and review. Config payloads are versioned and digested after canonical JSON normalization, but are not validated against a selected Collector distribution schema. The Phase 18 cache and Phase 19 polling client are reusable packages and are not yet wired into an actual Collector runtime. Use TLS and network restrictions before any non-loopback deployment. Do not expose this service publicly or use it for real customer tenants until shared transactional persistence, a deployment-specific Collector schema validator, transactional pipeline activation, backup/restore, and end-to-end outage/rollback tests are complete.
+State is stored in SQLite and each request is wrapped in a write-reserving transaction; this supports concurrent processes on one host and a local persistent volume, not multi-host replicas. To migrate legacy JSON, stop the service, move the old JSON file to the configured DB path, and start the service; it will preserve a `.legacy-json.bak` copy and import the state. Back up a live DB using SQLite’s online backup mechanism, not by copying only the main file while WAL is active. The shipped Collector agent now validates config candidates using the bundled Collector binary and rolls back failed restart/health checks. Remote control-plane failure does not stop the existing Collector process; the poller backs off while the active local pipeline continues. OIDC tenant and role claims still require provider-specific mapping and review. Do not expose the service publicly or use it for real customer tenants until a multi-host database, TLS, secrets management, rate limiting, backup/restore drills, and target-environment outage tests are in place.

@@ -1,0 +1,34 @@
+name: signalforge-management
+
+services:
+  management:
+    build:
+      context: ../..
+      dockerfile: deploy/management/Dockerfile
+    image: signalforge-management:local
+    container_name: signalforge-management
+    restart: unless-stopped
+    environment:
+      SIGNALFORGE_MANAGEMENT_ADDR: "0.0.0.0:8081"
+      SIGNALFORGE_MANAGEMENT_DB: /var/lib/signalforge/management.db
+      SIGNALFORGE_ADMIN_TOKEN: ${SIGNALFORGE_ADMIN_TOKEN:?Set SIGNALFORGE_ADMIN_TOKEN in your environment}
+      SIGNALFORGE_OIDC_ISSUER: ${SIGNALFORGE_OIDC_ISSUER:-}
+      SIGNALFORGE_OIDC_AUDIENCE: ${SIGNALFORGE_OIDC_AUDIENCE:-}
+      SIGNALFORGE_OIDC_JWKS_URL: ${SIGNALFORGE_OIDC_JWKS_URL:-}
+      SIGNALFORGE_OIDC_TENANT_CLAIM: ${SIGNALFORGE_OIDC_TENANT_CLAIM:-tenant_id}
+      SIGNALFORGE_OIDC_ROLES_CLAIM: ${SIGNALFORGE_OIDC_ROLES_CLAIM:-roles}
+    ports:
+      - "${MANAGEMENT_BIND:-127.0.0.1}:${MANAGEMENT_PORT:-8081}:8081"
+    volumes:
+      - management-data:/var/lib/signalforge:Z
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8081/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  management-data:

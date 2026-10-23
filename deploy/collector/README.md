@@ -320,3 +320,15 @@ and Prometheus rule/dashboard validation. Traces and metrics still go to the
 debug exporter only. This phase does not add vendor exporters, adaptive
 sampling, a monetary cost model, Collector CPU/latency profiling, or automated
 rotation scheduling. Those remain separate future work.
+
+
+## Remote configuration agent
+
+The image now starts `signalforge-agent`, which supervises the bundled `signalforge-collector`. With no remote-config variables set, it starts the baked-in local configuration and continues to process telemetry locally. To enable polling, set both:
+
+- `SIGNALFORGE_CONFIG_ENDPOINT`: full HTTPS URL ending in `/api/v1/agents/config`.
+- `SIGNALFORGE_AGENT_CREDENTIAL`: one-time-enrollment credential returned by the management API (store it in a secret manager; do not commit it to `.env`).
+
+The agent polls every `SIGNALFORGE_POLL_INTERVAL` (default `30s`). It validates the received JSON/YAML-compatible Collector config using the bundled Collector binary, stages the candidate under `/var/lib/signalforge/config`, restarts the Collector, and checks its health endpoint. If validation, restart, or health checks fail, it restores the previous configuration and acknowledges rejection. The last-known-good cache and active config live in a persistent named volume, `signalforge-config`.
+
+Remote endpoints must use HTTPS; HTTP is accepted only for loopback development. Control-plane outages use bounded retry backoff and do not intentionally stop the currently running Collector pipeline. Verify this behavior with the target environment before production use.

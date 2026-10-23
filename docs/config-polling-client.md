@@ -1,6 +1,6 @@
 # Phase 19: authenticated remote configuration polling
 
-The `internal/configclient` package connects the agent credential and management API to the Phase 18 last-known-good cache. It is a reusable client/poller, not yet a live OpenTelemetry Collector pipeline adapter.
+The `internal/configclient` package connects the enrolled agent credential and management API to the Phase 18 last-known-good cache. It is wired into the shipped `signalforge-agent` runtime, which supervises the bundled OpenTelemetry Collector process.
 
 ## Endpoint and transport
 
@@ -12,7 +12,7 @@ The `internal/configclient` package connects the agent credential and management
 
 ## Poll and failure behavior
 
-- The poller fetches an immutable versioned envelope, delegates schema validation, and delegates activation to the Phase 18 cache contract.
+- The poller fetches an immutable versioned envelope, validates it through the exact bundled Collector binary, and delegates activation to the Phase 18 cache contract. The runtime stages the candidate, restarts the Collector, and waits for the health endpoint before the cache commits the new last-known-good version.
 - It acknowledges a version as applied only after refresh succeeds; validation/activation errors produce a rejected acknowledgement.
 - No assigned policy is a healthy no-op and does not create a false acknowledgement.
 - Failures retry with bounded exponential backoff and jitter. The cache remains available to restore last-known-good configuration; the caller must keep local OTLP processing independent from this poll loop.
@@ -24,4 +24,4 @@ The management API now canonicalizes JSON policy payloads before computing the d
 
 ## Remaining release gates
 
-This package still requires a deployment-specific Collector schema validator and a transactional pipeline activator. No production runtime currently wires this poller into an OpenTelemetry Collector pipeline, exposes its status endpoint, or proves end-to-end local processing during control-plane outages. OIDC tenant-user authorization and shared transactional control-plane persistence also remain incomplete.
+The adapter uses a process restart rather than an in-process hot reload. It validates before activation and restores the prior config if restart or health verification fails. Polling failure does not stop the current local pipeline. Production rollout still needs multi-host persistence (SQLite is single-host), provider-specific OIDC claim review, secure secret delivery, backup/restore drills, rate limiting, and failure injection on the target deployment.

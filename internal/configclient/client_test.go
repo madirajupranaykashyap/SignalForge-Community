@@ -187,3 +187,28 @@ func TestFetcherDoesNotFollowRedirects(t *testing.T) {
 	if _, err := fetcher.FetchConfig(context.Background()); err == nil { t.Fatal("redirect response unexpectedly accepted") }
 	if targetHits != 0 { t.Fatalf("redirect target received %d requests", targetHits) }
 }
+
+
+func TestControlPlaneOutageLeavesLastKnownGoodConfigUntouched(t *testing.T) {
+	initial := testEnvelope()
+	config := configcache.Config{Version: initial.Version, SchemaVersion: initial.SchemaVersion, Digest: initial.Digest, Config: initial.Config}
+	cache, err := configcache.New(filepath.Join(t.TempDir(), "active.json"))
+	if err != nil { t.Fatal(err) }
+	if _, err := cache.Refresh(context.Background(), fixedFetcher{config: config}, nil, nil); err != nil { t.Fatal(err) }
+
+	acks := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v1/agents/config/ack" { acks++; w.WriteHeader(http.StatusNoContent); return }
+		http.Error(w, "simulated control-plane outage", http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	fetcher, err := NewFetcher(server.URL+"/api/v1/agents/config", "agent-secret", server.Client())
+	if err != nil { t.Fatal(err) }
+	p := &Poller{Fetcher: fetcher, Cache: cache}
+	if err := p.pollOnce(context.Background()); err == nil { t.Fatal("expected control-plane outage") }
+	active, ok := cache.Active()
+	if !ok || active.Version != initial.Version || active.Digest != initial.Digest {
+		t.Fatalf("last-known-good config changed during outage: %#v", active)
+	}
+	if acks != 0 { t.Fatalf("unexpected acknowledgement during failed fetch: %d", acks) }
+}
