@@ -268,7 +268,7 @@ func (p *Poller) pollOnce(ctx context.Context) error {
 		p.mu.Unlock()
 		if c, ok := p.Fetcher.LastFetched(); ok {
 			ackCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			ackErr := p.Fetcher.Acknowledge(ackCtx, c.Version, false, err.Error())
+			ackErr := p.Fetcher.Acknowledge(ackCtx, c.Version, false, safeError(err))
 			cancel()
 			if ackErr != nil {
 				p.mu.Lock()
@@ -302,9 +302,18 @@ func (p *Poller) setSuccess(at time.Time, message string) {
 
 func safeError(err error) string {
 	if err == nil { return "" }
-	s := err.Error()
-	if len(s) > 512 { return s[:512] }
-	return s
+	switch {
+	case errors.Is(err, ErrNoAssignment):
+		return ""
+	case errors.Is(err, configcache.ErrDigestMismatch):
+		return "configuration digest mismatch"
+	case errors.Is(err, configcache.ErrStaleVersion):
+		return "stale configuration version rejected"
+	case errors.Is(err, configcache.ErrInvalidConfig):
+		return "configuration rejected by integrity or schema validation"
+	default:
+		return "control-plane synchronization failed"
+	}
 }
 
 func jitter(d time.Duration) time.Duration {
