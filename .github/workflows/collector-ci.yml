@@ -71,6 +71,7 @@ jobs:
         run: |
           set -euo pipefail
           marker="SIGNALFORGE-CI-SMOKE-$(date +%s)"
+          echo "SMOKE_MARKER=$marker" >> "$GITHUB_ENV"
           payload=$(printf '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"signalforge-ci-smoke"}}]},"scopeLogs":[{"scope":{"name":"signalforge-ci"},"logRecords":[{"timeUnixNano":"1760000000000000000","severityText":"INFO","body":{"stringValue":"%s"}}]}]}]}' "$marker")
 
           response=$(curl --silent --show-error --output "$RUNNER_TEMP/otlp-response.json" \
@@ -96,6 +97,32 @@ jobs:
           echo "The OTLP request succeeded, but the marker was not found in the archive."
           find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
           exit 1
+
+      - name: Restart Collector and verify archive persists
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker restart signalforge-collector-ci
+
+          for attempt in $(seq 1 45); do
+            if docker exec signalforge-collector-ci wget -q -O /dev/null http://127.0.0.1:13133/; then
+              break
+            fi
+            sleep 2
+          done
+
+          if ! docker exec signalforge-collector-ci wget -q -O /dev/null http://127.0.0.1:13133/; then
+            echo "Collector did not become healthy after restart."
+            docker logs signalforge-collector-ci
+            exit 1
+          fi
+
+          if ! grep -R -F -- "$SMOKE_MARKER" "$RUNNER_TEMP/signalforge-archive"; then
+            echo "Previously archived marker is missing after restart."
+            find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
+            exit 1
+          fi
+          echo "Archived log persisted across a Collector restart."
 
       - name: Show Collector logs on failure
         if: failure()
