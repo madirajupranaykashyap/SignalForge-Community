@@ -1,6 +1,7 @@
 package main
 
 import (
+ "bytes"
  "crypto/rand"
  "crypto/sha256"
  "crypto/subtle"
@@ -77,6 +78,9 @@ func (s *Server) getConfig(w http.ResponseWriter,r *http.Request){s.mu.Lock();de
 func (s *Server) ack(w http.ResponseWriter,r *http.Request){s.mu.Lock();defer s.mu.Unlock();a,ok:=s.agentAuth(r);if !ok{http.Error(w,"unauthorized",401);return};var q struct{Version int `json:"version"`;Applied bool `json:"applied"`;Message string `json:"message"`};if !s.decode(w,r,&q){return};if q.Version!=a.ConfigVersion{http.Error(w,"version conflict",409);return};if q.Applied{a.AppliedVersion=q.Version};s.state.Agents[a.ID]=a;s.state.Audit=append(s.state.Audit,map[string]string{"action":"config.ack","agent_id":a.ID,"version":strconv.Itoa(q.Version),"applied":map[bool]string{true:"true",false:"false"}[q.Applied],"message":q.Message});if e:=s.persist();e!=nil{http.Error(w,"persistence failure",500);return};w.WriteHeader(204)
 }
 func (s *Server) createPolicy(w http.ResponseWriter,r *http.Request){var q struct{TenantID string `json:"tenant_id"`;SchemaVersion string `json:"schema_version"`;Config json.RawMessage `json:"config"`};if !s.decode(w,r,&q){return};if q.SchemaVersion==""||len(q.Config)==0||!json.Valid(q.Config){http.Error(w,"invalid schema_version or config",422);return}
+ var compact bytes.Buffer
+ if e:=json.Compact(&compact,q.Config);e!=nil{http.Error(w,"invalid config JSON",422);return}
+ q.Config=append(json.RawMessage(nil),compact.Bytes()...)
  s.mu.Lock();defer s.mu.Unlock();if !s.state.Tenants[q.TenantID]{http.NotFound(w,r);return};ps:=s.state.Policies[q.TenantID];v:=1;if len(ps)>0{v=ps[len(ps)-1].Version+1};d:=sha256.Sum256(q.Config);p:=Policy{TenantID:q.TenantID,Version:v,SchemaVersion:q.SchemaVersion,Config:append(json.RawMessage(nil),q.Config...),Digest:hex.EncodeToString(d[:]),CreatedAt:time.Now().UTC()};s.state.Policies[q.TenantID]=append(ps,p);for id,a:=range s.state.Agents{if a.TenantID==q.TenantID&&!a.Revoked{a.ConfigVersion=v;s.state.Agents[id]=a}};s.state.Audit=append(s.state.Audit,map[string]string{"action":"policy.create","tenant_id":q.TenantID,"version":strconv.Itoa(v),"at":p.CreatedAt.Format(time.RFC3339Nano)});if e:=s.persist();e!=nil{http.Error(w,"persistence failure",500);return};w.WriteHeader(201);_ = json.NewEncoder(w).Encode(p)
 }
 func (s *Server) revoke(w http.ResponseWriter,r *http.Request){id:=strings.TrimSuffix(strings.TrimPrefix(r.URL.Path,"/api/v1/admin/agents/"),"/revoke");s.mu.Lock();defer s.mu.Unlock();a,ok:=s.state.Agents[id];if !ok{http.NotFound(w,r);return};a.Revoked=true;a.CredentialHash="";s.state.Agents[id]=a;s.state.Audit=append(s.state.Audit,map[string]string{"action":"agent.revoke","agent_id":id,"at":time.Now().UTC().Format(time.RFC3339Nano)});if e:=s.persist();e!=nil{http.Error(w,"persistence failure",500);return};w.WriteHeader(204)}
