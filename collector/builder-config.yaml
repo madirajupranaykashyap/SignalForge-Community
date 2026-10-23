@@ -18,6 +18,10 @@ processors:
   - gomod:
       github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.159.0
 
+connectors:
+  - gomod:
+      github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0
+
 exporters:
   - gomod:
       go.opentelemetry.io/collector/exporter/debugexporter v0.159.0

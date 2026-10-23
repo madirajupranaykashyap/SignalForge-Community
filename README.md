@@ -29,3 +29,8 @@ See `docs/architecture.md` for the architecture and development plan.
 ## License
 
 Community components are licensed under Apache License 2.0. Check each component's license and third-party notices before redistribution.
+
+
+The initial optimization measurement baseline emits separate input and
+post-policy log-record count metrics. It does not yet claim byte or monetary
+savings.

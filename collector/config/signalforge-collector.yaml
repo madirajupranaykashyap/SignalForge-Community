@@ -1,7 +1,4 @@
-# SignalForge OpenTelemetry Collector configuration.
-# Archive all incoming logs for completeness; optimize the downstream stream
-# using configurable, deterministic policy rules.
-
+# SignalForge Collector: raw log archive, optimized stream, and measurement counts.
 receivers:
   otlp:
     protocols:
@@ -9,7 +6,6 @@ receivers:
         endpoint: "0.0.0.0:4317"
       http:
         endpoint: "0.0.0.0:4318"
-
 processors:
   memory_limiter:
     check_interval: 1s
@@ -20,46 +16,49 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        # Explicit low-value rule: discard DEBUG records from the optimized stream.
         - 'severity_text == "DEBUG"'
-        # Drop known health-check noise from the optimized stream.
         - 'attributes["http.route"] == "/health"'
         - 'attributes["service.name"] == "health-check"'
-
+connectors:
+  count/input:
+    logs:
+      signalforge.input.log.records:
+        description: "Log records entering the raw archive pipeline."
+  count/optimized:
+    logs:
+      signalforge.optimized.log.records:
+        description: "Log records remaining after optimization policies."
 exporters:
   debug:
-    # Detailed output includes log bodies, allowing CI to assert policy outcomes.
     verbosity: detailed
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
     create_directory: true
-
 extensions:
   health_check:
     endpoint: "127.0.0.1:13133"
-
 service:
   extensions: [health_check]
   pipelines:
-    # Completeness path: archive all received logs before optimization.
     logs/archive:
       receivers: [otlp]
       processors: [memory_limiter, batch]
-      exporters: [file/archive]
-
-    # Optimization path: deterministic rules reduce downstream log volume.
+      exporters: [file/archive, count/input]
+    metrics/optimization-input:
+      receivers: [count/input]
+      exporters: [debug]
     logs/optimized:
       receivers: [otlp]
       processors: [memory_limiter, filter/optimization, batch]
+      exporters: [debug, count/optimized]
+    metrics/optimization-output:
+      receivers: [count/optimized]
       exporters: [debug]
-
-    # Traces and metrics remain available for inspection during this phase.
     traces/inspection:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [debug]
-
     metrics/inspection:
       receivers: [otlp]
       processors: [memory_limiter, batch]
