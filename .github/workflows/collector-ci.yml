@@ -36,14 +36,16 @@ jobs:
           set -euo pipefail
 
           docker run --rm \
+            --entrypoint promtool \
             --volume "$PWD/deploy/collector/prometheus:/etc/prometheus:ro" \
             prom/prometheus:v3.5.0 \
-            promtool check config /etc/prometheus/prometheus.yml.example
+            check config /etc/prometheus/prometheus.yml.example
 
           docker run --rm \
+            --entrypoint promtool \
             --volume "$PWD/deploy/collector/prometheus:/etc/prometheus:ro" \
             prom/prometheus:v3.5.0 \
-            promtool check rules \
+            check rules \
               /etc/prometheus/recording-rules.yml \
               /etc/prometheus/alerting-rules.yml
 
