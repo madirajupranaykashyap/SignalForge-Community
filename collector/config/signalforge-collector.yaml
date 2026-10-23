@@ -1,6 +1,6 @@
 # SignalForge OpenTelemetry Collector configuration.
-# Archive every incoming log once. Traces and metrics are currently accepted
-# and sent to the debug exporter for validation; persistent archives are logs-only.
+# Archive all incoming logs for completeness; optimize the downstream stream
+# using configurable, deterministic policy rules.
 
 receivers:
   otlp:
@@ -16,16 +16,20 @@ processors:
     limit_mib: 256
   batch:
     timeout: 5s
-  filter/drop-noisy:
+  filter/optimization:
     error_mode: ignore
     logs:
       log_record:
+        # Explicit low-value rule: discard DEBUG records from the optimized stream.
+        - 'severity_text == "DEBUG"'
+        # Drop known health-check noise from the optimized stream.
         - 'attributes["http.route"] == "/health"'
         - 'attributes["service.name"] == "health-check"'
 
 exporters:
   debug:
-    verbosity: basic
+    # Detailed output includes log bodies, allowing CI to assert policy outcomes.
+    verbosity: detailed
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
@@ -38,20 +42,19 @@ extensions:
 service:
   extensions: [health_check]
   pipelines:
-    # Raw archive: all received logs are persisted once, before filtering.
+    # Completeness path: archive all received logs before optimization.
     logs/archive:
       receivers: [otlp]
       processors: [memory_limiter, batch]
       exporters: [file/archive]
 
-    # Filtered log stream for local inspection or a future destination.
-    logs/filtered:
+    # Optimization path: deterministic rules reduce downstream log volume.
+    logs/optimized:
       receivers: [otlp]
-      processors: [memory_limiter, filter/drop-noisy, batch]
+      processors: [memory_limiter, filter/optimization, batch]
       exporters: [debug]
 
-    # Traces and metrics are accepted, processed, and debug-exported.
-    # They are not persisted to the logs-only file archive.
+    # Traces and metrics remain available for inspection during this phase.
     traces/inspection:
       receivers: [otlp]
       processors: [memory_limiter, batch]
