@@ -38,3 +38,8 @@ savings.
 
 The Collector exposes input and post-optimization log count metrics through a
 loopback-bound Prometheus endpoint by default; see the deployment guide.
+
+
+## Control plane roadmap
+
+Phase 17 defines the control-plane trust boundaries and agent/configuration API contract in [the control-plane foundation design](docs/control-plane-foundation.md). These are design specifications, not implemented endpoints. Agent enrollment and remote policy delivery must remain disabled until tenant isolation, credential lifecycle, durable storage, and last-known-good configuration behavior are implemented and tested.
