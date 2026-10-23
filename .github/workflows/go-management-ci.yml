@@ -9,6 +9,10 @@ on:
       - 'go.mod'
       - 'deploy/collector/Dockerfile'
       - 'deploy/management/**'
+      - 'scripts/management-*.sh'
+      - 'scripts/test-management-recovery.sh'
+      - 'docs/operations-recovery.md'
+      - 'README.md'
       - '.github/workflows/go-management-ci.yml'
   push:
     branches: [main]
@@ -49,6 +53,12 @@ jobs:
         run: go test -race ./...
       - name: Run static analysis
         run: go vet ./...
+      - name: Test management SQLite backup and restore scripts
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes sqlite3
+          bash -n scripts/management-backup.sh scripts/management-restore.sh scripts/test-management-recovery.sh
+          scripts/test-management-recovery.sh
       - name: Build management container
         run: docker build --file deploy/management/Dockerfile --tag signalforge-management:ci .
       - name: Smoke-test management API and persistence across restart

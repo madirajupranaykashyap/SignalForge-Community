@@ -14,14 +14,43 @@
 3. Inspect the agent/Collector logs for the failure, correct the policy, and publish a new version. Do not re-publish a different payload under the same version.
 4. Verify health, OTLP ingestion, raw archive completeness, optimized output, and the applied version after recovery.
 
-## SQLite backup, migration, and restore
+## SQLite backup and restore
 
-- The management API database is `data/management.db` by default; the container deployment stores it in the persistent `management-data` volume.
-- For a live database, use SQLite's online backup API/CLI (for example, `sqlite3 management.db ".backup 'management.db.backup'"`). Do not copy only the main database file while the WAL is active.
-- To migrate legacy JSON, stop the service and move the old JSON file to the configured DB path. Startup preserves it as `.legacy-json.bak` and imports its state into SQLite. Keep the backup until the migrated service has been verified.
-- To restore, stop all writers, restore the database and any required filesystem permissions from a known-good backup, then start the service and verify tenant, agent, and policy records.
-- Keep encrypted backups off-host and test restoration regularly.
+The management API database defaults to `data/management.db`; the container deployment uses the persistent `management-data` volume.
 
-## Boundaries
+### Create a consistent backup
 
-SQLite WAL is intended for a local persistent filesystem and multiple processes on one host; it is not suitable for a multi-host control plane or NFS. Before horizontal SaaS scaling, migrate to PostgreSQL or an equivalent server database. Keep the management service on loopback/private networking behind TLS, store bootstrap and agent credentials in a secret manager, and review OIDC tenant/role claims with the identity provider.
+Use SQLite's online backup API rather than copying the database file while WAL may be active:
+
+```bash
+scripts/management-backup.sh /path/to/management.db /path/to/private-backups
+```
+
+The script creates a timestamped SQLite backup, runs `PRAGMA integrity_check`, applies restrictive permissions (directory 0700, file 0600), and only publishes the completed file after validation. Copy completed backups to encrypted off-host storage using your organization-approved mechanism. Do not put secrets or backup artifacts in the repository.
+
+### Restore a backup
+
+1. Stop every management API instance and prevent automatic restart. Never restore while a writer is active.
+2. Preserve the current database and its `-wal`/`-shm` sidecars for forensic recovery, if present.
+3. Restore to a new, non-existing target path:
+
+   ```bash
+   scripts/management-restore.sh /path/to/management-YYYYMMDDTHHMMSSZ.db /path/to/management.db
+   ```
+
+4. Start one management API instance and verify health, tenant/agent/policy records, OIDC authorization, and agent configuration polling before reopening traffic.
+5. Record the restore point and observed data loss, if any. Re-enable replicas only after the restored state is confirmed.
+
+The restore script validates the source and staged copy and refuses to overwrite an existing database. It deliberately does not stop services or move existing databases automatically.
+
+### Legacy JSON migration
+
+Stop the service and move the old JSON file to the configured DB path. Startup preserves it as `.legacy-json.bak` and imports its state into SQLite. Keep that backup until the migrated service has been verified.
+
+## Recovery drills
+
+Run a restore drill before each production release and at least quarterly thereafter. Use an isolated copy of the database, not production. Record backup age, restore duration, integrity-check output, record counts, and whether a test agent can retrieve its assigned config. A successful integrity check proves SQLite structural integrity, not application-level completeness.
+
+## Boundaries and production gates
+
+SQLite WAL is intended for a local persistent filesystem and multiple processes on one host; it is not suitable for a multi-host control plane or NFS. Before horizontal SaaS scaling, migrate to PostgreSQL or an equivalent server database. Keep the management service on loopback/private networking behind TLS, store bootstrap and agent credentials in a secret manager, and review OIDC tenant/role claims with the identity provider. These scripts do not encrypt backups; encryption and off-host retention must be supplied by the operator.
