@@ -6,10 +6,13 @@ services:
     container_name: ${COLLECTOR_CONTAINER_NAME:-signalforge-collector}
     restart: unless-stopped
     pull_policy: always
+    environment:
+      SIGNALFORGE_DROP_SEVERITY: ${SIGNALFORGE_DROP_SEVERITY:-DEBUG}
+      SIGNALFORGE_HEALTH_ROUTE: ${SIGNALFORGE_HEALTH_ROUTE:-/health}
+      SIGNALFORGE_HEALTH_SERVICE: ${SIGNALFORGE_HEALTH_SERVICE:-health-check}
     ports:
       - "${OTLP_GRPC_BIND:-127.0.0.1}:${OTLP_GRPC_PORT:-4317}:4317"
       - "${OTLP_HTTP_BIND:-127.0.0.1}:${OTLP_HTTP_PORT:-4318}:4318"
-      - "${METRICS_BIND:-127.0.0.1}:${METRICS_PORT:-9464}:9464"
       - "${METRICS_BIND:-127.0.0.1}:${METRICS_PORT:-9464}:9464"
     volumes:
       - "${ARCHIVE_DIR:-./archive}:/var/lib/signalforge/archive:Z"
@@ -20,3 +23,26 @@ services:
       retries: 3
       start_period: 15s
     stop_grace_period: 30s
+
+  archive-metrics:
+    image: python:3.13-alpine
+    container_name: ${ARCHIVE_METRICS_CONTAINER_NAME:-signalforge-archive-metrics}
+    restart: unless-stopped
+    user: "65534:65534"
+    command: ["python", "/app/archive_metrics.py"]
+    environment:
+      ARCHIVE_METRICS_PORT: "9465"
+      ARCHIVE_METRICS_PATH: /archive
+    ports:
+      - "${ARCHIVE_METRICS_BIND:-127.0.0.1}:${ARCHIVE_METRICS_PORT:-9465}:9465"
+    volumes:
+      - "${ARCHIVE_DIR:-./archive}:/archive:ro,Z"
+      - "./metrics/archive_metrics.py:/app/archive_metrics.py:ro,Z"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9465/healthz', timeout=2)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    read_only: true
+    security_opt:
+      - no-new-privileges:true

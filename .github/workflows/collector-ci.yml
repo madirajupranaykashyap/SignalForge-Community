@@ -76,6 +76,28 @@ jobs:
           print(f"Validated dashboard JSON and {len(panels)} panels.")
           PY
 
+      - name: Test archive metrics and policy configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s deploy/collector/tests -v
+          python3 -m py_compile deploy/collector/metrics/archive_metrics.py
+          python3 - <<'PY'
+          from pathlib import Path
+
+          config = Path("collector/config/signalforge-collector.yaml").read_text()
+          required = [
+              '${env:SIGNALFORGE_DROP_SEVERITY}',
+              '${env:SIGNALFORGE_HEALTH_ROUTE}',
+              '${env:SIGNALFORGE_HEALTH_SERVICE}',
+              'path: /var/lib/signalforge/archive/optimized.jsonl',
+          ]
+          missing = [item for item in required if item not in config]
+          if missing:
+              raise SystemExit(f"Collector policy/archive config missing: {missing}")
+          print("Policy substitutions and optimized archive exporter are configured.")
+          PY
+
       - name: Build Collector image
         run: docker build --file deploy/collector/Dockerfile --tag signalforge-collector:ci .
 
@@ -183,9 +205,14 @@ jobs:
           fi
 
           for attempt in $(seq 1 30); do
-            if grep -R -F -- "$debug_marker" "$RUNNER_TEMP/signalforge-archive" >/dev/null \
-              && grep -R -F -- "$info_marker" "$RUNNER_TEMP/signalforge-archive" >/dev/null; then
-              echo "Optimization policy dropped DEBUG downstream while retaining both records in the raw archive."
+            if grep -F -- "$debug_marker" "$RUNNER_TEMP/signalforge-archive/logs.jsonl" >/dev/null \
+              && grep -F -- "$info_marker" "$RUNNER_TEMP/signalforge-archive/logs.jsonl" >/dev/null \
+              && grep -F -- "$info_marker" "$RUNNER_TEMP/signalforge-archive/optimized.jsonl" >/dev/null; then
+              if grep -F -- "$debug_marker" "$RUNNER_TEMP/signalforge-archive/optimized.jsonl" >/dev/null; then
+                echo "DEBUG marker unexpectedly reached the optimized archive."
+                exit 1
+              fi
+              echo "Raw archive retains both records; optimized archive retains INFO and excludes DEBUG."
               exit 0
             fi
             sleep 1
