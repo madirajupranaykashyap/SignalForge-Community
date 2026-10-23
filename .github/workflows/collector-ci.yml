@@ -44,6 +44,9 @@ jobs:
           go-version-file: go.mod
           check-latest: true
 
+      - name: Resolve Go module dependencies
+        run: go mod tidy
+
       - name: Test Go management and config client
         run: go test ./...
 

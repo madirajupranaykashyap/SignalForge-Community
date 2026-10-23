@@ -1,18 +1,24 @@
-name: Go management and config client CI
+name: Go management, storage, and Collector agent CI
 
 on:
   pull_request:
     paths:
       - 'cmd/management/**'
+      - 'cmd/collector-agent/**'
       - 'internal/**'
       - 'go.mod'
+      - 'deploy/collector/Dockerfile'
+      - 'deploy/management/**'
       - '.github/workflows/go-management-ci.yml'
   push:
     branches: [main]
     paths:
       - 'cmd/management/**'
+      - 'cmd/collector-agent/**'
       - 'internal/**'
       - 'go.mod'
+      - 'deploy/collector/Dockerfile'
+      - 'deploy/management/**'
       - '.github/workflows/go-management-ci.yml'
 
 permissions:
@@ -29,7 +35,73 @@ jobs:
         with:
           go-version-file: go.mod
           check-latest: true
-      - name: Run unit and package tests
-        run: go test ./...
+      - name: Resolve and verify module dependencies
+        run: go mod tidy
+      - name: Upload resolved Go checksums for reproducible builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: signalforge-go-sum
+          path: |
+            go.mod
+            go.sum
+          if-no-files-found: error
+      - name: Run race-enabled unit and integration tests
+        run: go test -race ./...
       - name: Run static analysis
         run: go vet ./...
+      - name: Build management container
+        run: docker build --file deploy/management/Dockerfile --tag signalforge-management:ci .
+      - name: Smoke-test management API and persistence across restart
+        shell: bash
+        run: |
+          set -euo pipefail
+          token='signalforge-ci-admin-token-0123456789abcdef0123456789'
+          docker run --detach --name signalforge-management-ci \
+            --publish 127.0.0.1:18081:8081 \
+            --env SIGNALFORGE_ADMIN_TOKEN="$token" \
+            signalforge-management:ci
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          if ! curl --fail --silent http://127.0.0.1:18081/healthz >/dev/null; then
+            echo "Management container failed initial startup."
+            docker logs signalforge-management-ci || true
+            docker inspect signalforge-management-ci || true
+            exit 1
+          fi
+          curl --fail --silent --show-error \
+            --header "Authorization: Bearer $token" \
+            --header 'Content-Type: application/json' \
+            --data '{"tenant_id":"ci-persistence"}' \
+            http://127.0.0.1:18081/api/v1/admin/tenants >/dev/null
+          docker restart signalforge-management-ci >/dev/null
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18081/healthz >/dev/null; then break; fi
+            sleep 1
+          done
+          if ! curl --fail --silent http://127.0.0.1:18081/healthz >/dev/null; then
+            echo "Management container failed to recover after restart."
+            docker logs signalforge-management-ci || true
+            docker inspect signalforge-management-ci || true
+            exit 1
+          fi
+          if ! status=$(curl --silent --show-error --max-time 5 --output "$RUNNER_TEMP/duplicate-tenant.json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $token" \
+            --header 'Content-Type: application/json' \
+            --data '{"tenant_id":"ci-persistence"}' \
+            http://127.0.0.1:18081/api/v1/admin/tenants); then
+            echo "Duplicate-tenant request could not reach the restarted service."
+            docker logs signalforge-management-ci || true
+            docker inspect signalforge-management-ci || true
+            exit 1
+          fi
+          if [ "$status" != "409" ]; then
+            cat "$RUNNER_TEMP/duplicate-tenant.json"
+            echo "Expected persisted tenant to return HTTP 409 after restart; got $status."
+            exit 1
+          fi
+          echo "Management health and durable SQLite state survived container restart."
+      - name: Stop management smoke-test container
+        if: always()
+        run: docker rm --force signalforge-management-ci || true

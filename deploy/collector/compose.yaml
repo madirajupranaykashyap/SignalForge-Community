@@ -10,12 +10,18 @@ services:
       SIGNALFORGE_DROP_SEVERITY: ${SIGNALFORGE_DROP_SEVERITY:-DEBUG}
       SIGNALFORGE_HEALTH_ROUTE: ${SIGNALFORGE_HEALTH_ROUTE:-/health}
       SIGNALFORGE_HEALTH_SERVICE: ${SIGNALFORGE_HEALTH_SERVICE:-health-check}
+      SIGNALFORGE_CONFIG_ENDPOINT: ${SIGNALFORGE_CONFIG_ENDPOINT:-}
+      SIGNALFORGE_AGENT_CREDENTIAL: ${SIGNALFORGE_AGENT_CREDENTIAL:-}
+      SIGNALFORGE_CONFIG_CACHE: /var/lib/signalforge/config/last-known-good.json
+      SIGNALFORGE_ACTIVE_CONFIG: /var/lib/signalforge/config/active.yml
+      SIGNALFORGE_POLL_INTERVAL: ${SIGNALFORGE_POLL_INTERVAL:-30s}
     ports:
       - "${OTLP_GRPC_BIND:-127.0.0.1}:${OTLP_GRPC_PORT:-4317}:4317"
       - "${OTLP_HTTP_BIND:-127.0.0.1}:${OTLP_HTTP_PORT:-4318}:4318"
       - "${METRICS_BIND:-127.0.0.1}:${METRICS_PORT:-9464}:9464"
     volumes:
       - "${ARCHIVE_DIR:-./archive}:/var/lib/signalforge/archive:Z"
+      - signalforge-config:/var/lib/signalforge/config:Z
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:13133/"]
       interval: 30s
@@ -46,3 +52,6 @@ services:
     read_only: true
     security_opt:
       - no-new-privileges:true
+
+volumes:
+  signalforge-config:

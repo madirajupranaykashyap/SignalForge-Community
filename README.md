@@ -13,15 +13,15 @@ SignalForge is a vendor-neutral telemetry optimization platform that helps engin
 
 ## Project status
 
-Early development. The Collector accepts OTLP logs, traces, and metrics. The first policy-driven optimization baseline drops DEBUG logs and known health-check noise from the downstream log stream while preserving all received logs in the raw archive. Traces and metrics currently go to debug output and are not durably archived.
+Early development. The Collector accepts OTLP logs, traces, and metrics. The first policy-driven optimization baseline drops DEBUG logs and known health-check noise from the downstream log stream while preserving received logs in the raw archive. Traces and metrics currently go to debug output and are not durably archived. When configured with an enrolled agent credential, the Collector agent polls the management API, validates remote configs using the actual bundled Collector binary, and activates changes with restart/health-check rollback.
 
 ## Deployment
 
-A Podman Compose package for the custom OpenTelemetry Collector is available in [deploy/collector](deploy/collector/README.md). It binds OTLP ports to loopback by default and persists received logs in a JSONL archive. Review the deployment guide before exposing OTLP endpoints to other hosts.
+A Podman Compose package for the custom OpenTelemetry Collector is available in [deploy/collector](deploy/collector/README.md). It binds OTLP ports to loopback by default and persists received logs in a JSONL archive. A separate local management API package is documented in [deploy/management](deploy/management/README.md). Review both deployment guides before exposing endpoints to other hosts.
 
 ## Development
 
-See [docs/architecture.md](docs/architecture.md) for the architecture and development plan.
+See [docs/architecture.md](docs/architecture.md) for the architecture and development plan, and [the operations recovery runbook](docs/operations-recovery.md) for outage, rollback, and database recovery procedures.
 
 ## License
 
@@ -38,4 +38,4 @@ The Collector exposes input and post-optimization log count metrics through a lo
 - Phase 19 adds an authenticated remote config polling client with bounded request sizes/timeouts, HTTPS enforcement for non-loopback endpoints, applied/rejected acknowledgements, and retry backoff with jitter. See [the polling client contract](docs/config-polling-client.md) and [test plan](docs/config-polling-test-plan.md).
 - Phase 20 adds OIDC RS256 verification and tenant-scoped role-based API routes. See [Tenant OIDC and RBAC](docs/tenant-oidc-rbac.md).
 
-These phases are foundations, not production readiness. The management API still uses a local JSON file, the config client is not wired into a live Collector pipeline, and a distribution-specific Collector schema validator plus transactional pipeline activation remain release gates. Do not expose the management service publicly or use it for real customer tenants until transactional shared persistence, identity/role mapping review, backup/restore, and end-to-end outage/rollback tests are complete.
+The follow-up integration phase adds SQLite transactional state with a legacy JSON import/backup path, a Collector agent runtime adapter, distribution-specific validation through the shipped Collector binary, and rollback on failed restart/health checks. CI tests storage transactions, validation failures, restart rollback, and the Collector container smoke path. This is still not a multi-host SaaS control plane: SQLite is intended for a single host/local durable volume, and production identity-provider claim mapping, PostgreSQL or equivalent distributed persistence, TLS deployment, backup/restore drills, rate limiting, and real-environment outage testing remain release gates.

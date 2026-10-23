@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -11,14 +12,17 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
 	"os"
-	"path/filepath"
-	"strconv"
+	"os/signal"
+		"strconv"
 	"strings"
+	"syscall"
 	"sync"
 	"time"
 
 	"github.com/madirajupranaykashyap/SignalForge-Community/internal/oidcauth"
+	"github.com/madirajupranaykashyap/SignalForge-Community/internal/managementstore"
 )
 
 type Agent struct {
@@ -48,8 +52,12 @@ type State struct {
 }
 type Server struct {
 	mu sync.Mutex
-	path, adminHash string
+	requestMu sync.Mutex
+	adminHash string
 	state State
+	store *managementstore.Store
+	tx *managementstore.Tx
+	txErr error
 	oidc *oidcauth.Verifier
 }
 
@@ -57,16 +65,16 @@ func hash(v string) string { h:=sha256.Sum256([]byte(v)); return hex.EncodeToStr
 func random(n int)(string,error){ b:=make([]byte,n); if _,e:=rand.Read(b);e!=nil{return "",e}; return hex.EncodeToString(b),nil }
 func newServer(path, admin string)(*Server,error){
 	if len(admin)<32{return nil,errors.New("SIGNALFORGE_ADMIN_TOKEN must contain at least 32 characters")}
-	s:=&Server{path:path,adminHash:hash(admin),state:State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{}}}
-	b,e:=os.ReadFile(path);if e==nil{if e=json.Unmarshal(b,&s.state);e!=nil{return nil,e}}else if !errors.Is(e,os.ErrNotExist){return nil,e}
-	if s.state.Tenants==nil{s.state.Tenants=map[string]bool{}};if s.state.Tokens==nil{s.state.Tokens=map[string]Token{}};if s.state.Agents==nil{s.state.Agents=map[string]Agent{}};if s.state.Policies==nil{s.state.Policies=map[string][]Policy{}}
-	return s,nil
+	initial:=State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{},Audit:[]map[string]string{}}
+	payload,err:=json.Marshal(initial);if err!=nil{return nil,err}
+	store,err:=managementstore.Open(path,payload);if err!=nil{return nil,err}
+	return &Server{adminHash:hash(admin),store:store,state:initial},nil
 }
 func (s *Server) persist()error{
-	b,e:=json.MarshalIndent(s.state,"","  ");if e!=nil{return e};dir:=filepath.Dir(s.path);if e=os.MkdirAll(dir,0700);e!=nil{return e}
-	f,e:=os.CreateTemp(dir,".state-*");if e!=nil{return e};name:=f.Name();defer os.Remove(name)
-	if e=f.Chmod(0600);e==nil{_,e=f.Write(b)};if e==nil{e=f.Sync()};ce:=f.Close();if e==nil{e=ce};if e!=nil{return e};if e=os.Rename(name,s.path);e!=nil{return e}
-	d,e:=os.Open(dir);if e==nil{_ = d.Sync();_ = d.Close()};return nil
+	if s.tx==nil{return errors.New("management transaction is not active")}
+	b,e:=json.Marshal(s.state);if e!=nil{return e}
+	if e=s.tx.Save(b);e!=nil{s.txErr=e;return e}
+	return nil
 }
 func (s *Server) decode(w http.ResponseWriter,r *http.Request,v any)bool{
 	r.Body=http.MaxBytesReader(w,r.Body,1<<20);d:=json.NewDecoder(r.Body);d.DisallowUnknownFields()
@@ -75,8 +83,34 @@ func (s *Server) decode(w http.ResponseWriter,r *http.Request,v any)bool{
 func (s *Server) adminAuth(r *http.Request)bool{v:=strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ");if v==""||v==r.Header.Get("Authorization"){return false};return subtle.ConstantTimeCompare([]byte(hash(v)),[]byte(s.adminHash))==1}
 func (s *Server) agentAuth(r *http.Request)(Agent,bool){v:=strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ");if v==""||v==r.Header.Get("Authorization"){return Agent{},false};h:=hash(v);for _,a:=range s.state.Agents{if a.CredentialHash!=""&&subtle.ConstantTimeCompare([]byte(h),[]byte(a.CredentialHash))==1&&!a.Revoked{return a,true}};return Agent{},false}
 func (s *Server) ServeHTTP(w http.ResponseWriter,r *http.Request){
-	w.Header().Set("Content-Type","application/json")
-	if r.URL.Path=="/healthz"&&r.Method=="GET"{_ = json.NewEncoder(w).Encode(map[string]string{"status":"healthy"});return}
+	if r.URL.Path=="/healthz"&&r.Method=="GET"{w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(map[string]string{"status":"healthy"});return}
+	// A write-reserving SQLite transaction spans load -> handler -> save, so
+	// concurrent processes cannot overwrite state from a stale in-memory copy.
+	s.requestMu.Lock()
+	defer s.requestMu.Unlock()
+	tx,err:=s.store.Begin(r.Context())
+	if err!=nil{http.Error(w,"management storage unavailable",http.StatusServiceUnavailable);return}
+	payload,err:=tx.Load()
+	if err!=nil{_ = tx.Rollback();http.Error(w,"management storage unavailable",http.StatusServiceUnavailable);return}
+	var fresh State
+	if err=json.Unmarshal(payload,&fresh);err!=nil{_ = tx.Rollback();http.Error(w,"management storage is corrupt",http.StatusInternalServerError);return}
+	if fresh.Tenants==nil{fresh.Tenants=map[string]bool{}}
+	if fresh.Tokens==nil{fresh.Tokens=map[string]Token{}}
+	if fresh.Agents==nil{fresh.Agents=map[string]Agent{}}
+	if fresh.Policies==nil{fresh.Policies=map[string][]Policy{}}
+	if fresh.Audit==nil{fresh.Audit=[]map[string]string{}}
+	s.mu.Lock();s.state=fresh;s.mu.Unlock()
+	s.tx=tx;s.txErr=nil
+	recorder:=httptest.NewRecorder()
+	s.dispatchHTTP(recorder,r)
+	if s.txErr!=nil{_ = tx.Rollback();s.tx=nil;http.Error(w,"management persistence failure",http.StatusInternalServerError);return}
+	if err=tx.Commit();err!=nil{_ = tx.Rollback();s.tx=nil;http.Error(w,"management persistence failure",http.StatusInternalServerError);return}
+	s.tx=nil
+	for k,values:=range recorder.Header(){w.Header().Del(k);for _,v:=range values{w.Header().Add(k,v)}}
+	w.WriteHeader(recorder.Code)
+	_,_=w.Write(recorder.Body.Bytes())
+}
+func (s *Server) dispatchHTTP(w http.ResponseWriter,r *http.Request){
 	if strings.HasPrefix(r.URL.Path,"/api/v1/tenants/"){s.tenantAPI(w,r);return}
 	if r.Method=="POST"&&r.URL.Path=="/api/v1/agents/enroll"{s.enroll(w,r);return}
 	if r.Method=="POST"&&r.URL.Path=="/api/v1/agents/heartbeat"{s.heartbeat(w,r);return}
@@ -114,14 +148,21 @@ func (s *Server) revoke(w http.ResponseWriter,r *http.Request){id:=strings.TrimS
 }
 
 func main(){
-	path:=os.Getenv("SIGNALFORGE_MANAGEMENT_STATE");if path==""{path="data/management-state.json"}
+	path:=os.Getenv("SIGNALFORGE_MANAGEMENT_DB");if path==""{path="data/management.db"}
 	s,e:=newServer(path,os.Getenv("SIGNALFORGE_ADMIN_TOKEN"));if e!=nil{log.Fatal(e)}
 	issuer,audience,jwks:=os.Getenv("SIGNALFORGE_OIDC_ISSUER"),os.Getenv("SIGNALFORGE_OIDC_AUDIENCE"),os.Getenv("SIGNALFORGE_OIDC_JWKS_URL")
 	if issuer!=""||audience!=""||jwks!="" {
 		s.oidc,e=oidcauth.New(oidcauth.Config{Issuer:issuer,Audience:audience,JWKSURL:jwks,TenantClaim:os.Getenv("SIGNALFORGE_OIDC_TENANT_CLAIM"),RolesClaim:os.Getenv("SIGNALFORGE_OIDC_ROLES_CLAIM")})
-		if e!=nil{log.Fatal(e)}
+		if e!=nil{_ = s.store.Close();log.Fatal(e)}
 	}
 	addr:=os.Getenv("SIGNALFORGE_MANAGEMENT_ADDR");if addr==""{addr="127.0.0.1:8081"}
 	srv:=&http.Server{Addr:addr,Handler:s,ReadHeaderTimeout:5*time.Second,IdleTimeout:60*time.Second}
-	log.Printf("[signalforge-management] listening on %s",addr);log.Fatal(srv.ListenAndServe())
+	ctx,stop:=signal.NotifyContext(context.Background(),os.Interrupt,syscall.SIGTERM)
+	defer stop()
+	go func(){<-ctx.Done();shutdownCtx,cancel:=context.WithTimeout(context.Background(),10*time.Second);defer cancel();_ = srv.Shutdown(shutdownCtx)}()
+	log.Printf("[signalforge-management] listening on %s",addr)
+	err:=srv.ListenAndServe()
+	stop()
+	_ = s.store.Close()
+	if err!=nil&&!errors.Is(err,http.ErrServerClosed){log.Printf("[signalforge-management] server stopped: %v",err);os.Exit(1)}
 }

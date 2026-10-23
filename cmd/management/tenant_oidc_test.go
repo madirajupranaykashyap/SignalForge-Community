@@ -36,10 +36,16 @@ func newTenantTestServer(t *testing.T) (*Server,*rsa.PrivateKey) {
 	jwks:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){_ = json.NewEncoder(w).Encode(map[string]any{"keys":[]any{jwk}})}))
 	t.Cleanup(jwks.Close)
 	v,err:=oidcauth.New(oidcauth.Config{Issuer:"https://id.example.test",Audience:"signalforge",JWKSURL:jwks.URL});if err!=nil{t.Fatal(err)}
-	s,err:=newServer(filepath.Join(t.TempDir(),"state.json"),strings.Repeat("x",40));if err!=nil{t.Fatal(err)}
+	admin:=strings.Repeat("x",40)
+	s,err:=newServer(filepath.Join(t.TempDir(),"state.db"),admin);if err!=nil{t.Fatal(err)}
+	t.Cleanup(func(){_ = s.store.Close()})
 	s.oidc=v
-	s.state.Tenants["tenant-a"]=true
-	s.state.Tenants["tenant-b"]=true
+	for _,tenant:=range []string{"tenant-a","tenant-b"} {
+		req:=httptest.NewRequest(http.MethodPost,"/api/v1/admin/tenants",strings.NewReader(`{"tenant_id":"`+tenant+`"}`))
+		req.Header.Set("Authorization","Bearer "+admin)
+		w:=httptest.NewRecorder();s.ServeHTTP(w,req)
+		if w.Code!=http.StatusCreated { t.Fatalf("seed tenant %s: %d %s",tenant,w.Code,w.Body) }
+	}
 	return s,key
 }
 func tenantCall(s *Server,method,path,token,body string)*httptest.ResponseRecorder{
