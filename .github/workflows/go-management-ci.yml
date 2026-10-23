@@ -1,0 +1,35 @@
+name: Go management and config client CI
+
+on:
+  pull_request:
+    paths:
+      - 'cmd/management/**'
+      - 'internal/**'
+      - 'go.mod'
+      - '.github/workflows/go-management-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cmd/management/**'
+      - 'internal/**'
+      - 'go.mod'
+      - '.github/workflows/go-management-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  go-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+      - name: Run unit and package tests
+        run: go test ./...
+      - name: Run static analysis
+        run: go vet ./...
