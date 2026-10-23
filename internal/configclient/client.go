@@ -241,6 +241,7 @@ func (p *Poller) Run(ctx context.Context) error {
 		delay := interval
 		if err != nil {
 			delay = jitter(backoff)
+			if delay > maxBackoff { delay = maxBackoff }
 			backoff *= 2
 			if backoff > maxBackoff { backoff = maxBackoff }
 		} else {
