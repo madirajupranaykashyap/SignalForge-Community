@@ -22,7 +22,7 @@ func (f fixedFetcher) FetchConfig(context.Context) (configcache.Config, error) {
 func testEnvelope() envelope {
 	raw := json.RawMessage(`{"receivers":{"otlp":{}}}`)
 	sum := sha256.Sum256(raw)
-	return envelope{Version: 3, SchemaVersion: "1", Digest: hex.EncodeToString(sum[:]), Config: raw}
+	return envelope{TenantID: "tenant-1", CreatedAt: time.Now().UTC(), Version: 3, SchemaVersion: "1", Digest: hex.EncodeToString(sum[:]), Config: raw}
 }
 
 func TestPollerFetchesValidatesActivatesAndAcknowledges(t *testing.T) {
