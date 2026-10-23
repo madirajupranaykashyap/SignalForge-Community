@@ -161,3 +161,13 @@ If your SmartHome Podman Compose stack already runs a collector, do not start
 the standalone package with the default settings. Both would otherwise compete
 for host ports 4317/4318. Keep the existing service or use the isolated test
 settings above.
+
+
+## Optimization measurements
+
+The Collector emits separate count metrics for logs entering the raw archive
+(`signalforge.input.log.records`) and logs remaining after optimization
+(`signalforge.optimized.log.records`). These support record-reduction
+calculations, but do not yet estimate bytes saved, processing overhead, or
+monetary savings. The count metrics currently flow through debug output; a
+dedicated metrics endpoint and external reporting are follow-up work.
