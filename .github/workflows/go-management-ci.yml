@@ -11,6 +11,9 @@ on:
       - 'deploy/management/**'
       - 'scripts/management-*.sh'
       - 'scripts/test-management-recovery.sh'
+      - 'scripts/management-backup-postgres-encrypted.sh'
+      - 'scripts/management-restore-postgres-encrypted.sh'
+      - 'scripts/test-postgres-recovery.sh'
       - 'docs/operations-recovery.md'
       - 'README.md'
       - '.github/workflows/go-management-ci.yml'
@@ -78,6 +81,16 @@ jobs:
           sudo apt-get install --yes sqlite3
           bash -n scripts/management-backup.sh scripts/management-restore.sh scripts/test-management-recovery.sh
           scripts/test-management-recovery.sh
+      - name: Install PostgreSQL recovery test tools
+        run: sudo apt-get update && sudo apt-get install --yes age postgresql-client
+      - name: Create isolated PostgreSQL restore target
+        env:
+          PGPASSWORD: signalforge-ci-password
+        run: createdb --host=127.0.0.1 --username=signalforge signalforge_restore_test
+      - name: Test encrypted PostgreSQL backup and restore
+        run: |
+          bash -n scripts/management-backup-postgres-encrypted.sh scripts/management-restore-postgres-encrypted.sh scripts/test-postgres-recovery.sh
+          scripts/test-postgres-recovery.sh
       - name: Build management container
         run: docker build --file deploy/management/Dockerfile --tag signalforge-management:ci .
       - name: Smoke-test management API and persistence across restart
