@@ -185,3 +185,17 @@ Expected metric names include `signalforge_input_log_records` and
 `signalforge_optimized_log_records` (Prometheus normalizes dots to underscores).
 Scrape the endpoint and calculate record reduction over the same interval.
 These counters measure record counts, not byte savings or monetary savings.
+
+
+## Prometheus optimization metrics
+
+The Collector exposes optimization count metrics on a Prometheus-compatible
+`/metrics` endpoint at container port `9464`. Compose publishes this on
+`127.0.0.1:9464` by default. Configure `METRICS_BIND` and `METRICS_PORT`
+to change the host binding. Keep it on loopback unless your monitoring network
+is trusted and access is restricted by firewall policy.
+
+Expected metric names include `signalforge_input_log_records` and
+`signalforge_optimized_log_records` (Prometheus normalizes dots to underscores).
+Scrape the endpoint and calculate record reduction over the same interval.
+These counters measure record counts, not byte savings or monetary savings.
