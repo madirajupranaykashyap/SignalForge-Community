@@ -47,3 +47,8 @@ Adds operator-invoked SQLite backup and restore helpers that use the SQLite inte
 ## Phase 22: management API security hardening
 
 Adds a bounded per-source token-bucket rate limit (default 120 requests per minute, configurable with `SIGNALFORGE_RATE_LIMIT_RPM`), HTTP 429 with `Retry-After`, browser security headers, and `Cache-Control: no-store` for API responses. Health probes are exempt from rate limiting. The API deliberately does not trust forwarded IP headers; deployments behind a reverse proxy must account for the proxy's shared source address. These controls complement but do not replace TLS, network restrictions, strong secrets, and provider-specific OIDC claim review.
+
+
+## Phase 23: PostgreSQL persistence foundation
+
+The management API can use PostgreSQL through `SIGNALFORGE_MANAGEMENT_DATABASE_URL`; when configured, it takes precedence over the local SQLite path. Transactions lock the singleton management-state row while reading and updating the snapshot so writes from multiple replicas do not overwrite one another. SQLite remains the default for local/single-host development. PostgreSQL production deployments still require TLS verification, HA/failover planning, encrypted off-host backups, restore drills, and provider-specific identity review.

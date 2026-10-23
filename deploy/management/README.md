@@ -34,3 +34,10 @@ The named `management-data` volume stores `management.db`. Stop the service befo
 SQLite WAL is suitable for a local persistent volume and concurrent processes on one host. It is **not** a multi-host SaaS database and must not be placed on NFS. Use PostgreSQL or an equivalent server database before horizontally scaling the control plane.
 
 See [management API reference](../../docs/management-api.md) and [tenant OIDC/RBAC notes](../../docs/tenant-oidc-rbac.md).
+
+
+## Secret files and TLS reverse proxy
+
+The management process accepts `SIGNALFORGE_ADMIN_TOKEN_FILE` and `SIGNALFORGE_MANAGEMENT_DATABASE_URL_FILE`. Each points to a readable file **inside the container**; the corresponding direct environment variable must be empty. The file content is read at startup, with trailing line endings removed. Mount secret files read-only through your deployment's secret mechanism or a Compose override. Do not bake secrets into the image or commit them to `.env`.
+
+For a host-installed Caddy reverse proxy, adapt [`Caddyfile.example`](Caddyfile.example) to your DNS name. Caddy provisions HTTPS certificates automatically. Keep the management listener bound to loopback, expose only the proxy's HTTPS port, and restrict inbound network access. The sample is a starting point; validate TLS policy, DNS, certificate renewal, and firewall rules in the target environment.
