@@ -5,12 +5,20 @@ on:
     paths:
       - "collector/**"
       - "deploy/collector/**"
+      - "cmd/management/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/go-management-ci.yml"
       - ".github/workflows/collector-ci.yml"
   push:
     branches: [main]
     paths:
       - "collector/**"
       - "deploy/collector/**"
+      - "cmd/management/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/go-management-ci.yml"
       - ".github/workflows/collector-ci.yml"
   workflow_dispatch:
 
@@ -29,6 +37,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          check-latest: true
+
+      - name: Test Go management and config client
+        run: go test ./...
+
+      - name: Vet Go packages
+        run: go vet ./...
 
       - name: Validate Prometheus rules and Grafana dashboard
         shell: bash
