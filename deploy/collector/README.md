@@ -169,8 +169,9 @@ The Collector emits separate count metrics for logs entering the raw archive
 (`signalforge.input.log.records`) and logs remaining after optimization
 (`signalforge.optimized.log.records`). These support record-reduction
 calculations, but do not yet estimate bytes saved, processing overhead, or
-monetary savings. The count metrics currently flow through debug output; a
-dedicated metrics endpoint and external reporting are follow-up work.
+monetary savings. The Collector also exposes these counters through the Prometheus endpoint
+described below. Recording rules for rate and record-reduction analytics are
+provided in `prometheus/recording-rules.yml`.
 
 
 ## Prometheus optimization metrics
@@ -187,15 +188,25 @@ Scrape the endpoint and calculate record reduction over the same interval.
 These counters measure record counts, not byte savings or monetary savings.
 
 
-## Prometheus optimization metrics
+## Optimization analytics recording rules
 
-The Collector exposes optimization count metrics on a Prometheus-compatible
-`/metrics` endpoint at container port `9464`. Compose publishes this on
-`127.0.0.1:9464` by default. Configure `METRICS_BIND` and `METRICS_PORT`
-to change the host binding. Keep it on loopback unless your monitoring network
-is trusted and access is restricted by firewall policy.
+Load `prometheus/recording-rules.yml` from your Prometheus configuration using
+`rule_files`. The rules run every 30 seconds and calculate five-minute rates
+for input and optimized log records, plus the record-reduction percentage:
 
-Expected metric names include `signalforge_input_log_records` and
-`signalforge_optimized_log_records` (Prometheus normalizes dots to underscores).
-Scrape the endpoint and calculate record reduction over the same interval.
-These counters measure record counts, not byte savings or monetary savings.
+```promql
+100 * (1 - rate(signalforge_optimized_log_records[5m])
+           / clamp_min(rate(signalforge_input_log_records[5m]), 1e-9))
+```
+
+The recording-rule file aggregates across matching counter series. Query the
+recorded series `signalforge:input_log_records:rate5m`,
+`signalforge:optimized_log_records:rate5m`, and
+`signalforge:log_record_reduction_percent:rate5m` in dashboards. The reduction
+percentage can be negative if optimized throughput exceeds input throughput
+within the selected rate window; investigate that rather than interpreting it
+as savings. During idle periods the rate-based percentage can be noisy.
+
+These are **record-count** analytics only. They do not establish bytes saved,
+CPU or latency overhead, policy-specific drop reasons, or monetary savings.
+Those require additional instrumentation and a defined cost model.
