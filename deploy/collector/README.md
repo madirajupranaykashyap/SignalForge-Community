@@ -210,3 +210,17 @@ as savings. During idle periods the rate-based percentage can be noisy.
 These are **record-count** analytics only. They do not establish bytes saved,
 CPU or latency overhead, policy-specific drop reasons, or monetary savings.
 Those require additional instrumentation and a defined cost model.
+
+## Grafana dashboard
+
+Import `grafana/signalforge-optimization-dashboard.json` into Grafana and
+select the Prometheus data source that scrapes the Collector's `/metrics`
+endpoint. The dashboard uses the recording-rule series defined in
+`prometheus/recording-rules.yml`, so configure and validate those rules first.
+
+The dashboard shows input and optimized log-record rates, their comparison,
+and the calculated record-count reduction percentage. A negative percentage
+means optimized throughput exceeded input throughput during the selected rate
+window; investigate the counters and scrape coverage. Sparse traffic can make
+the percentage noisy. These charts do not estimate payload bytes, infrastructure
+cost, or money saved.
