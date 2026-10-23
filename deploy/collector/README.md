@@ -28,11 +28,13 @@ The default ports bind to loopback only:
 - OTLP/gRPC: `127.0.0.1:4317`
 - OTLP/HTTP: `127.0.0.1:4318`
 
-The active archive is `deploy/collector/archive/logs.jsonl`. The file exporter
-rotates it at approximately 100 MiB and keeps up to 10 rotated files, pruning
-rotated files older than 7 days. Rotated files have timestamps in their names;
-back up the entire archive directory, not only `logs.jsonl`. Actual disk use
-depends on ingestion volume and file sizes.
+The active archive is `deploy/collector/archive/logs.jsonl`. The Collector
+currently appends to this single file so that data survives Collector restarts.
+Automatic file rotation is deliberately not enabled: the upstream file exporter
+does not support `append: true` together with rotation, and disabling append
+can truncate the active file when the Collector restarts. Until a restart-safe
+rotation mechanism is implemented, monitor disk usage and use an external
+archive/retention process that is designed for an actively written file.
 
 The volume uses Podman's `:Z` SELinux label. If your Compose implementation
 does not support this suffix, use a compatible Podman Compose version or
@@ -95,13 +97,12 @@ the rollback target because it moves.
 
 ## Archive retention and backup
 
-The active archive is newline-delimited JSON. Size-based rotation creates
-timestamped archive files; the configured policy keeps up to 10 rotated files
-and prunes rotated files older than 7 days. This is a bounded local retention
-policy, not a backup strategy. Monitor disk usage and copy important archives
-off-host. Stop or quiesce the collector before making a file-level backup to
-avoid capturing a partially written final line. Back up the whole archive
-directory, including rotated files. For example:
+The active archive is newline-delimited JSON and currently grows without
+automatic rotation. Monitor disk usage and copy important archives off-host.
+Stop or quiesce the collector before making a file-level backup to avoid
+capturing a partially written final line. Back up the entire archive directory.
+Do not configure the upstream file exporter with rotation while `append: true`
+is required for restart durability. For example:
 
 ```bash
 podman-compose -f compose.yaml stop collector
