@@ -15,6 +15,10 @@ on:
     paths:
       - "collector/**"
       - "deploy/collector/**"
+      - "cmd/management/**"
+      - "internal/**"
+      - "go.mod"
+      - ".github/workflows/go-management-ci.yml"
       - ".github/workflows/collector-ci.yml"
   workflow_dispatch:
 
