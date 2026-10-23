@@ -1,0 +1,106 @@
+name: Collector build and smoke test
+
+on:
+  pull_request:
+    paths:
+      - "collector/**"
+      - "deploy/collector/**"
+      - ".github/workflows/collector-ci.yml"
+  push:
+    branches: [main]
+    paths:
+      - "collector/**"
+      - "deploy/collector/**"
+      - ".github/workflows/collector-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: collector-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Build Collector image
+        run: docker build --file deploy/collector/Dockerfile --tag signalforge-collector:ci .
+
+      - name: Start Collector and verify health
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/signalforge-archive"
+          chmod 777 "$RUNNER_TEMP/signalforge-archive"
+
+          docker run --detach \
+            --name signalforge-collector-ci \
+            --publish 127.0.0.1:14318:4318 \
+            --volume "$RUNNER_TEMP/signalforge-archive:/var/lib/signalforge/archive" \
+            signalforge-collector:ci
+
+          for attempt in $(seq 1 45); do
+            if docker exec signalforge-collector-ci \
+              wget -q -O /dev/null http://127.0.0.1:13133/; then
+              echo "Collector health endpoint is responding."
+              exit 0
+            fi
+
+            if [ "$(docker inspect --format '{{.State.Running}}' signalforge-collector-ci)" != "true" ]; then
+              echo "Collector container exited before becoming healthy."
+              docker logs signalforge-collector-ci
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          echo "Collector health endpoint did not become ready in time."
+          docker logs signalforge-collector-ci
+          exit 1
+
+      - name: Send OTLP log and verify archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="SIGNALFORGE-CI-SMOKE-$(date +%s)"
+          payload=$(printf '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"signalforge-ci-smoke"}}]},"scopeLogs":[{"scope":{"name":"signalforge-ci"},"logRecords":[{"timeUnixNano":"1760000000000000000","severityText":"INFO","body":{"stringValue":"%s"}}]}]}]}' "$marker")
+
+          response=$(curl --silent --show-error --output "$RUNNER_TEMP/otlp-response.json" \
+            --write-out '%{http_code}' \
+            --header 'Content-Type: application/json' \
+            --data "$payload" \
+            http://127.0.0.1:14318/v1/logs)
+
+          if [ "$response" != "200" ]; then
+            cat "$RUNNER_TEMP/otlp-response.json"
+            echo "OTLP/HTTP returned HTTP $response (expected 200)."
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if grep -R -F -- "$marker" "$RUNNER_TEMP/signalforge-archive"; then
+              echo "Smoke-test log was written to the archive."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "The OTLP request succeeded, but the marker was not found in the archive."
+          find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
+          exit 1
+
+      - name: Show Collector logs on failure
+        if: failure()
+        run: docker logs signalforge-collector-ci || true
+
+      - name: Stop test container
+        if: always()
+        run: docker rm --force signalforge-collector-ci || true
