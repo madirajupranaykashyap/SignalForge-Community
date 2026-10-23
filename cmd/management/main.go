@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -64,6 +65,26 @@ type Server struct {
 
 func hash(v string) string { h:=sha256.Sum256([]byte(v)); return hex.EncodeToString(h[:]) }
 func random(n int)(string,error){ b:=make([]byte,n); if _,e:=rand.Read(b);e!=nil{return "",e}; return hex.EncodeToString(b),nil }
+func envOrFile(name string) (string, error) {
+	value := os.Getenv(name)
+	file := strings.TrimSpace(os.Getenv(name + "_FILE"))
+	if value != "" && file != "" {
+		return "", fmt.Errorf("configure only one of %s or %s_FILE", name, name)
+	}
+	if file == "" {
+		return value, nil
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return "", fmt.Errorf("read %s_FILE: %w", name, err)
+	}
+	value = strings.TrimRight(string(raw), "\r\n")
+	if value == "" {
+		return "", fmt.Errorf("%s_FILE is empty", name)
+	}
+	return value, nil
+}
+
 func emptyState() State {
  return State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{},Audit:[]map[string]string{}}
 }
@@ -156,10 +177,11 @@ func (s *Server) revoke(w http.ResponseWriter,r *http.Request){id:=strings.TrimS
 
 func main(){
 	path:=os.Getenv("SIGNALFORGE_MANAGEMENT_DB");if path==""{path="data/management.db"}
-	admin:=os.Getenv("SIGNALFORGE_ADMIN_TOKEN")
+	admin,secretErr:=envOrFile("SIGNALFORGE_ADMIN_TOKEN"); if secretErr!=nil { log.Fatal(secretErr) }
+	databaseURL,secretErr:=envOrFile("SIGNALFORGE_MANAGEMENT_DATABASE_URL"); if secretErr!=nil { log.Fatal(secretErr) }
 	var s *Server
 	var e error
-	if databaseURL:=strings.TrimSpace(os.Getenv("SIGNALFORGE_MANAGEMENT_DATABASE_URL"));databaseURL!="" {
+	if databaseURL=strings.TrimSpace(databaseURL);databaseURL!="" {
 		initial,marshalErr:=json.Marshal(emptyState()); if marshalErr!=nil { log.Fatal(marshalErr) }
 		store,openErr:=managementstore.OpenPostgres(databaseURL,initial); if openErr!=nil { log.Fatal(openErr) }
 		s,e=newServerWithStore(store,admin)

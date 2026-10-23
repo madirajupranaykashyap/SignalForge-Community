@@ -32,10 +32,10 @@ Existing `/api/v1/admin/*` routes remain protected by `SIGNALFORGE_ADMIN_TOKEN`;
 
 ## Current limits and remaining release gates
 
-- Persistence is still a local JSON file; transactions across replicas/processes are not supported.
+- Persistence defaults to SQLite for single-host installs; Phase 23 adds PostgreSQL transactions with a row lock for multi-instance deployments. The state is still stored as one JSON snapshot rather than normalized tenant/agent/policy tables.
 - OIDC user-to-tenant membership and role assignment are trusted from configured claims; provider-specific claim mapping and authorization policy still require deployment review.
 - No tenant UI, refresh-token flow, or dynamic client registration is included. Phase 22 adds API-level per-source rate limiting and security headers; deployment-specific TLS, trusted proxy policy, and identity-provider claim mapping remain operator responsibilities.
 - Policy payloads are digest-normalized but are not yet validated against a selected OpenTelemetry Collector distribution schema.
-- Live Collector pipeline activation, transactional database migrations, backup/restore, and end-to-end outage/rollback testing remain required before production use.
+- Provider-specific tenant/role claim mapping must still be reviewed against the actual identity provider. PostgreSQL backup/restore helpers and automated outage-retention tests are added in subsequent phases, but real-environment restore/failover drills remain required.
 
 Keep the management API on loopback or a private network behind TLS until those release gates are complete.

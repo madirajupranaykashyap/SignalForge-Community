@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -211,4 +212,48 @@ func TestControlPlaneOutageLeavesLastKnownGoodConfigUntouched(t *testing.T) {
 		t.Fatalf("last-known-good config changed during outage: %#v", active)
 	}
 	if acks != 0 { t.Fatalf("unexpected acknowledgement during failed fetch: %d", acks) }
+}
+
+func TestPollerKeepsLastKnownGoodDuringControlPlaneOutage(t *testing.T) {
+	var mode atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v1/agents/config":
+			switch mode.Load() {
+			case 1:
+				http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			default:
+				env := testEnvelope()
+				if mode.Load() == 2 { env.Version = 4 }
+				w.Header().Set("Content-Type", "application/json")
+				_ = json.NewEncoder(w).Encode(env)
+			}
+		case "/api/v1/agents/config/ack":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+	fetcher, err := NewFetcher(server.URL+"/api/v1/agents/config", "agent-secret", server.Client())
+	if err != nil { t.Fatal(err) }
+	cache, err := configcache.New(filepath.Join(t.TempDir(), "active.json"))
+	if err != nil { t.Fatal(err) }
+	activated := 0
+	p := &Poller{Fetcher: fetcher, Cache: cache,
+		Validate: func(_ string, raw json.RawMessage) error { if !json.Valid(raw) { return errors.New("invalid JSON") }; return nil },
+		Activate: func(_ context.Context, _ configcache.Config) error { activated++; return nil },
+	}
+	if err := p.pollOnce(context.Background()); err != nil { t.Fatal(err) }
+	if active, ok := cache.Active(); !ok || active.Version != 3 { t.Fatalf("initial active config = %#v, %v", active, ok) }
+
+	mode.Store(1)
+	if err := p.pollOnce(context.Background()); err == nil { t.Fatal("expected temporary control-plane outage") }
+	if active, ok := cache.Active(); !ok || active.Version != 3 { t.Fatalf("outage changed active config = %#v, %v", active, ok) }
+	if activated != 1 { t.Fatalf("outage unexpectedly activated config %d times", activated) }
+
+	mode.Store(2)
+	if err := p.pollOnce(context.Background()); err != nil { t.Fatal(err) }
+	if active, ok := cache.Active(); !ok || active.Version != 4 { t.Fatalf("config was not refreshed after recovery: %#v, %v", active, ok) }
+	if activated != 2 { t.Fatalf("activated %d times, want 2", activated) }
 }

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -52,4 +53,18 @@ func TestPolicyDigestMatchesCanonicalResponsePayload(t *testing.T){
 	if err=json.Unmarshal(w.Body.Bytes(),&response);err!=nil{t.Fatal(err)}
 	sum:=sha256.Sum256(response.Config)
 	if response.Digest!=hex.EncodeToString(sum[:]){t.Fatalf("digest %s does not match returned payload %s",response.Digest,response.Config)}
+}
+
+func TestEnvOrFileReadsSecretFileAndRejectsAmbiguousConfiguration(t *testing.T) {
+	const name = "SIGNALFORGE_TEST_SECRET"
+	t.Setenv(name, "")
+	path := filepath.Join(t.TempDir(), "secret")
+	if err := os.WriteFile(path, []byte("secret-value\r\n"), 0600); err != nil { t.Fatal(err) }
+	t.Setenv(name+"_FILE", path)
+	got, err := envOrFile(name)
+	if err != nil { t.Fatal(err) }
+	if got != "secret-value" { t.Fatalf("secret file value = %q", got) }
+
+	t.Setenv(name, "direct-value")
+	if _, err := envOrFile(name); err == nil { t.Fatal("accepted both direct secret and secret file") }
 }

@@ -1,0 +1,15 @@
+# Host-installed Caddy example. Replace the hostname with a domain you control.
+# Caddy obtains and renews a publicly trusted HTTPS certificate automatically.
+api.example.com {
+	encode zstd gzip
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		Strict-Transport-Security "max-age=31536000"
+	}
+
+	# Management API remains bound to host loopback; only Caddy is exposed publicly.
+	reverse_proxy 127.0.0.1:8081
+}
