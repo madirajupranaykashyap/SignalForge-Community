@@ -148,6 +148,24 @@ jobs:
           find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
           exit 1
 
+      - name: Verify optimization count metrics
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            logs=$(docker logs signalforge-collector-ci 2>&1 || true)
+            if printf '%s' "$logs" | grep -F 'signalforge.input.log.records' >/dev/null \
+              && printf '%s' "$logs" | grep -F 'signalforge.optimized.log.records' >/dev/null; then
+              echo "Input and post-optimization record count metrics were emitted."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Expected optimization count metrics were not emitted."
+          docker logs signalforge-collector-ci
+          exit 1
+
       - name: Send OTLP trace and metric smoke tests
         shell: bash
         run: |
