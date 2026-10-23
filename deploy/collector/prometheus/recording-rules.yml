@@ -1,0 +1,30 @@
+# SignalForge optimization analytics recording rules
+#
+# Load this file into Prometheus using rule_files, for example:
+#   rule_files:
+#     - /etc/prometheus/signalforge-recording-rules.yml
+#
+# These rules derive rates and record reduction from the Collector's cumulative
+# log-record counters. They measure records, not bytes, CPU cost, or money.
+
+groups:
+  - name: signalforge-optimization
+    interval: 30s
+    rules:
+      - record: signalforge:input_log_records:rate5m
+        expr: sum(rate(signalforge_input_log_records[5m]))
+
+      - record: signalforge:optimized_log_records:rate5m
+        expr: sum(rate(signalforge_optimized_log_records[5m]))
+
+      - record: signalforge:log_record_reduction_percent:rate5m
+        expr: |
+          100 *
+          (
+            1 -
+            (
+              sum(rate(signalforge_optimized_log_records[5m]))
+              /
+              clamp_min(sum(rate(signalforge_input_log_records[5m])), 1e-9)
+            )
+          )
