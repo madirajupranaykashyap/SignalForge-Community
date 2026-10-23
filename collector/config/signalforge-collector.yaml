@@ -28,12 +28,8 @@ exporters:
     verbosity: basic
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
+    append: true
     create_directory: true
-    rotation:
-      max_megabytes: 100
-      max_days: 7
-      max_backups: 10
-      localtime: false
 
 extensions:
   health_check:
