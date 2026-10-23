@@ -28,10 +28,17 @@ The default ports bind to loopback only:
 - OTLP/gRPC: `127.0.0.1:4317`
 - OTLP/HTTP: `127.0.0.1:4318`
 
-The archive is written to `deploy/collector/archive/logs.jsonl`. The volume
-uses Podman's `:Z` SELinux label. If your Compose implementation does not
-support this suffix, use a compatible Podman Compose version or configure the
-host SELinux label explicitly.
+The active archive is `deploy/collector/archive/logs.jsonl`. The Collector
+currently appends to this single file so that data survives Collector restarts.
+Automatic file rotation is deliberately not enabled: the upstream file exporter
+does not support `append: true` together with rotation, and disabling append
+can truncate the active file when the Collector restarts. Until a restart-safe
+rotation mechanism is implemented, monitor disk usage and use an external
+archive/retention process that is designed for an actively written file.
+
+The volume uses Podman's `:Z` SELinux label. If your Compose implementation
+does not support this suffix, use a compatible Podman Compose version or
+configure the host SELinux label explicitly.
 
 ## Verify ingestion
 
@@ -90,11 +97,12 @@ the rollback target because it moves.
 
 ## Archive retention and backup
 
-The archive is append-only JSON Lines in the configured host directory. It can
-grow indefinitely; monitor disk usage and define a retention policy before
-collecting high-volume telemetry. Stop or quiesce the collector before making
-a simple file-level backup to avoid capturing a partially written final line.
-For example:
+The active archive is newline-delimited JSON and currently grows without
+automatic rotation. Monitor disk usage and copy important archives off-host.
+Stop or quiesce the collector before making a file-level backup to avoid
+capturing a partially written final line. Back up the entire archive directory.
+Do not configure the upstream file exporter with rotation while `append: true`
+is required for restart durability. For example:
 
 ```bash
 podman-compose -f compose.yaml stop collector
