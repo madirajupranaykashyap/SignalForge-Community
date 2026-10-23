@@ -42,4 +42,4 @@ loopback-bound Prometheus endpoint by default; see the deployment guide.
 
 ## Control plane roadmap
 
-Phase 17 defines the control-plane trust boundaries and agent/configuration API contract in [the control-plane foundation design](docs/control-plane-foundation.md). These are design specifications, not implemented endpoints. Agent enrollment and remote policy delivery must remain disabled until tenant isolation, credential lifecycle, durable storage, and last-known-good configuration behavior are implemented and tested.
+Phase 17 defines the control-plane trust boundaries in [the design contract](docs/control-plane-foundation.md). A single-process management API reference implementation now exists in [docs/management-api.md](docs/management-api.md), covering tenant bootstrap, single-use enrollment tokens, agent credentials, heartbeats, versioned policy assignment, acknowledgements, and revocation. It is not production-ready: tenant-user OIDC/RBAC, transactional shared storage, Collector-side config validation/cache, and last-known-good activation remain release gates.
