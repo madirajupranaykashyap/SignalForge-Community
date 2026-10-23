@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -50,23 +49,19 @@ type jwksDocument struct { Keys []struct {
 	E string `json:"e"`
 } `json:"keys"` }
 
-type claims struct {
-	Issuer string `json:"iss"`
-	Audience json.RawMessage `json:"aud"`
-	Subject string `json:"sub"`
-	Expires int64 `json:"exp"`
-	NotBefore int64 `json:"nbf"`
-	TenantID string `json:"tenant_id"`
-	Roles []string `json:"roles"`
+func secureEndpoint(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" { return false }
+	if u.Scheme == "https" { return true }
+	return u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1" || u.Hostname() == "::1")
 }
 
 func New(cfg Config) (*Verifier, error) {
 	if strings.TrimSpace(cfg.Issuer)=="" || strings.TrimSpace(cfg.Audience)=="" || strings.TrimSpace(cfg.JWKSURL)=="" {
 		return nil, errors.New("OIDC issuer, audience, and JWKS URL are required")
 	}
-	u, err := url.Parse(cfg.JWKSURL)
-	if err != nil || u.Host=="" || (u.Scheme!="https" && !(u.Scheme=="http" && (u.Hostname()=="localhost" || u.Hostname()=="127.0.0.1" || u.Hostname()=="::1"))) {
-		return nil, errors.New("JWKS URL must use HTTPS (HTTP is allowed only for loopback development)")
+	if !secureEndpoint(cfg.Issuer) || !secureEndpoint(cfg.JWKSURL) {
+		return nil, errors.New("OIDC issuer and JWKS URL must use HTTPS (HTTP is allowed only for loopback development)")
 	}
 	if cfg.TenantClaim=="" { cfg.TenantClaim="tenant_id" }
 	if cfg.RolesClaim=="" { cfg.RolesClaim="roles" }
@@ -83,7 +78,7 @@ func (v *Verifier) loadKeys(force bool) (map[string]*rsa.PublicKey,error) {
 	resp,err:=v.client.Do(req);if err!=nil{return nil,errors.New("OIDC key service unavailable")}
 	defer resp.Body.Close()
 	if resp.StatusCode!=http.StatusOK{return nil,fmt.Errorf("OIDC key service returned status %d",resp.StatusCode)}
-	body,err:=io.ReadAll(io.LimitReader(resp.Body,1<<20+1));if err!=nil||len(body)>1<<20{return nil,errors.New("invalid OIDC key response")}
+	body,err:=io.ReadAll(io.LimitReader(resp.Body,(1<<20)+1));if err!=nil||len(body)>1<<20{return nil,errors.New("invalid OIDC key response")}
 	var doc jwksDocument
 	if err=json.Unmarshal(body,&doc);err!=nil{return nil,errors.New("invalid OIDC key response")}
 	keys:=map[string]*rsa.PublicKey{}
@@ -137,7 +132,3 @@ func (v *Verifier) Verify(token string) (Principal,error) {
 	if raw:=c[v.rolesClaim];len(raw)>0 {if json.Unmarshal(raw,&roles)!=nil{return empty,errors.New("roles claim must be an array of strings")}}
 	return Principal{Subject:sub,TenantID:tenant,Roles:roles},nil
 }
-
-// Keep crypto/x509 linked in this package's public surface for callers that need
-// to construct test keys without adding a third-party JWT dependency.
-var _ = x509.MarshalPKCS1PublicKey
