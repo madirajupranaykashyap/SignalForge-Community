@@ -28,7 +28,8 @@ processors:
 
 exporters:
   debug:
-    verbosity: basic
+    # Detailed output includes log bodies, allowing CI to assert policy outcomes.
+    verbosity: detailed
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
