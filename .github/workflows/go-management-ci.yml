@@ -31,6 +31,22 @@ permissions:
 jobs:
   go-test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: signalforge
+          POSTGRES_PASSWORD: signalforge-ci-password
+          POSTGRES_DB: signalforge_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U signalforge -d signalforge_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      SIGNALFORGE_TEST_POSTGRES_URL: postgres://signalforge:signalforge-ci-password@localhost:5432/signalforge_test?sslmode=disable
     steps:
       - name: Check out source
         uses: actions/checkout@v4
@@ -51,6 +67,8 @@ jobs:
           if-no-files-found: error
       - name: Run race-enabled unit and integration tests
         run: go test -race ./...
+      - name: Run PostgreSQL integration tests
+        run: go test -race ./internal/managementstore -run Postgres
       - name: Run static analysis
         run: go vet ./...
       - name: Test management SQLite backup and restore scripts

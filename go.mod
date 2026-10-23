@@ -2,7 +2,10 @@ module github.com/madirajupranaykashyap/SignalForge-Community
 
 go 1.27.3
 
-require modernc.org/sqlite v1.38.2
+require (
+	github.com/jackc/pgx/v5 v5.7.6
+	modernc.org/sqlite v1.38.2
+)
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
