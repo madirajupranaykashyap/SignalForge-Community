@@ -217,7 +217,8 @@ func (p *Poller) Run(ctx context.Context) error {
 	minBackoff := p.MinBackoff
 	if minBackoff <= 0 { minBackoff = time.Second }
 	maxBackoff := p.MaxBackoff
-	if maxBackoff < minBackoff { maxBackoff = time.Minute }
+	if maxBackoff <= 0 { maxBackoff = time.Minute }
+	if maxBackoff < minBackoff { maxBackoff = minBackoff }
 	p.mu.Lock()
 	p.status.Running = true
 	p.mu.Unlock()
