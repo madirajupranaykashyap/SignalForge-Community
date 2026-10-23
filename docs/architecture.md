@@ -35,3 +35,12 @@ These counters support record-reduction calculations without treating debug
 log text as a metric. Byte savings, processing overhead, and cost savings are
 not yet measured. The counters currently flow through the debug exporter and
 are not exposed through a dedicated Prometheus endpoint or remote backend.
+
+
+## Phase 6: metrics endpoint
+
+A Prometheus exporter exposes the optimization count connector metrics on
+container port 9464. The Compose package binds the host port to loopback by
+default. Monitoring systems can scrape the endpoint locally; remote exposure
+requires explicit network controls. The metrics describe record counts only,
+not bytes or monetary savings.
