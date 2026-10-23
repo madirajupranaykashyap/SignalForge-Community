@@ -55,8 +55,8 @@ type Server struct {
 	requestMu sync.Mutex
 	adminHash string
 	state State
-	store *managementstore.Store
-	tx *managementstore.Tx
+	store managementstore.Persistence
+	tx managementstore.Transaction
 	txErr error
 	oidc *oidcauth.Verifier
 	limiter *rateLimiter
@@ -64,12 +64,18 @@ type Server struct {
 
 func hash(v string) string { h:=sha256.Sum256([]byte(v)); return hex.EncodeToString(h[:]) }
 func random(n int)(string,error){ b:=make([]byte,n); if _,e:=rand.Read(b);e!=nil{return "",e}; return hex.EncodeToString(b),nil }
-func newServer(path, admin string)(*Server,error){
-	if len(admin)<32{return nil,errors.New("SIGNALFORGE_ADMIN_TOKEN must contain at least 32 characters")}
-	initial:=State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{},Audit:[]map[string]string{}}
-	payload,err:=json.Marshal(initial);if err!=nil{return nil,err}
-	store,err:=managementstore.Open(path,payload);if err!=nil{return nil,err}
-	return &Server{adminHash:hash(admin),store:store,state:initial,limiter:newRateLimiter(defaultRateLimitRPM)},nil
+func emptyState() State {
+ return State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{},Audit:[]map[string]string{}}
+}
+func newServer(path,admin string)(*Server,error) {
+ if len(admin)<32 { return nil,errors.New("SIGNALFORGE_ADMIN_TOKEN must contain at least 32 characters") }
+ initial,err:=json.Marshal(emptyState()); if err!=nil { return nil,err }
+ store,err:=managementstore.Open(path,initial); if err!=nil { return nil,err }
+ return newServerWithStore(store,admin)
+}
+func newServerWithStore(store managementstore.Persistence,admin string)(*Server,error) {
+ if len(admin)<32 { _=store.Close(); return nil,errors.New("SIGNALFORGE_ADMIN_TOKEN must contain at least 32 characters") }
+ return &Server{adminHash:hash(admin),store:store,state:emptyState(),limiter:newRateLimiter(defaultRateLimitRPM)},nil
 }
 func (s *Server) persist()error{
 	if s.tx==nil{return errors.New("management transaction is not active")}
@@ -150,7 +156,15 @@ func (s *Server) revoke(w http.ResponseWriter,r *http.Request){id:=strings.TrimS
 
 func main(){
 	path:=os.Getenv("SIGNALFORGE_MANAGEMENT_DB");if path==""{path="data/management.db"}
-	s,e:=newServer(path,os.Getenv("SIGNALFORGE_ADMIN_TOKEN"));if e!=nil{log.Fatal(e)}
+	admin:=os.Getenv("SIGNALFORGE_ADMIN_TOKEN")
+	var s *Server
+	var e error
+	if databaseURL:=strings.TrimSpace(os.Getenv("SIGNALFORGE_MANAGEMENT_DATABASE_URL"));databaseURL!="" {
+		initial,marshalErr:=json.Marshal(emptyState()); if marshalErr!=nil { log.Fatal(marshalErr) }
+		store,openErr:=managementstore.OpenPostgres(databaseURL,initial); if openErr!=nil { log.Fatal(openErr) }
+		s,e=newServerWithStore(store,admin)
+	} else { s,e=newServer(path,admin) }
+	if e!=nil{log.Fatal(e)}
 	issuer,audience,jwks:=os.Getenv("SIGNALFORGE_OIDC_ISSUER"),os.Getenv("SIGNALFORGE_OIDC_AUDIENCE"),os.Getenv("SIGNALFORGE_OIDC_JWKS_URL")
 	if issuer!=""||audience!=""||jwks!="" {
 		s.oidc,e=oidcauth.New(oidcauth.Config{Issuer:issuer,Audience:audience,JWKSURL:jwks,TenantClaim:os.Getenv("SIGNALFORGE_OIDC_TENANT_CLAIM"),RolesClaim:os.Getenv("SIGNALFORGE_OIDC_ROLES_CLAIM")})
