@@ -44,3 +44,10 @@ container port 9464. The Compose package binds the host port to loopback by
 default. Monitoring systems can scrape the endpoint locally; remote exposure
 requires explicit network controls. The metrics describe record counts only,
 not bytes or monetary savings.
+
+
+## Phase 17: control-plane foundation
+
+The control plane is a management plane, not a telemetry proxy. Collector instances must continue processing locally when the control plane is unavailable. Phase 17 defines enrollment, tenant isolation, versioned configuration, health reporting, and auditable policy changes before enabling remote configuration delivery.
+
+The API contract, trust boundaries, minimum persistence model, enrollment lifecycle, configuration lifecycle, and release gates are documented in [Control Plane Foundation](control-plane-foundation.md). The routes in that document are a design contract, not implemented endpoints. Do not enable remote policy mutation until authentication, tenant authorization, durable storage, and last-known-good configuration behavior are implemented and tested.
