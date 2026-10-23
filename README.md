@@ -34,3 +34,7 @@ Community components are licensed under Apache License 2.0. Check each component
 The initial optimization measurement baseline emits separate input and
 post-policy log-record count metrics. It does not yet claim byte or monetary
 savings.
+
+
+The Collector exposes input and post-optimization log count metrics through a
+loopback-bound Prometheus endpoint by default; see the deployment guide.

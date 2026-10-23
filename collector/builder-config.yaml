@@ -1,4 +1,4 @@
-
+ 
 dist:
   name: signalforge-collector
   description: SignalForge telemetry processing agent
@@ -9,7 +9,6 @@ dist:
 receivers:
   - gomod:
       go.opentelemetry.io/collector/receiver/otlpreceiver v0.159.0
-
 processors:
   - gomod:
       go.opentelemetry.io/collector/processor/batchprocessor v0.159.0
@@ -17,19 +16,18 @@ processors:
       go.opentelemetry.io/collector/processor/memorylimiterprocessor v0.159.0
   - gomod:
       github.com/open-telemetry/opentelemetry-collector-contrib/processor/filterprocessor v0.159.0
-
 connectors:
   - gomod:
       github.com/open-telemetry/opentelemetry-collector-contrib/connector/countconnector v0.159.0
-
 exporters:
   - gomod:
       go.opentelemetry.io/collector/exporter/debugexporter v0.159.0
   - gomod:
+      github.com/open-telemetry/opentelemetry-collector-contrib/exporter/prometheusexporter v0.159.0
+  - gomod:
       go.opentelemetry.io/collector/exporter/otlpexporter v0.159.0
   - gomod:
       github.com/open-telemetry/opentelemetry-collector-contrib/exporter/fileexporter v0.159.0
-
 providers:
   - gomod:
       go.opentelemetry.io/collector/confmap/provider/envprovider v1.48.0
@@ -37,6 +35,5 @@ providers:
       go.opentelemetry.io/collector/confmap/provider/fileprovider v1.48.0
   - gomod:
       go.opentelemetry.io/collector/confmap/provider/yamlprovider v1.48.0
-
 extensions:
   - gomod: github.com/open-telemetry/opentelemetry-collector-contrib/extension/healthcheckextension v0.159.0
