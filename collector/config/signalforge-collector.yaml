@@ -28,7 +28,7 @@ exporters:
   debug:
     verbosity: basic
   file/archive:
-    path: "./data/archive/logs.jsonl"
+    path: /var/lib/signalforge/archive/logs.jsonl
     append: true
     create_directory: true
   otlp/vendor:
