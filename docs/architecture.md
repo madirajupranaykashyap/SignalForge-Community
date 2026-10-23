@@ -58,3 +58,8 @@ Phase 20 alone did not make the management API production-ready. The follow-up i
 - CI covers storage transaction serialization, legacy import, validation rejection, restart failure rollback, the management API, and the Collector image smoke tests.
 
 The control plane and Collector agent are still early-stage. SQLite WAL requires local persistent storage and is not a multi-host database; use PostgreSQL or another server database before multi-replica SaaS deployment. Tenant/role claims need provider-specific review, and production rollout still requires backup/restore drills, secrets management, rate limiting, and failure injection in the target environment.
+
+
+## Phase 22: management API security hardening
+
+The management HTTP wrapper applies a per-source token bucket to API traffic (default 120 requests per minute, configurable up to 10000), returns HTTP 429 with `Retry-After`, sets defensive browser security headers, and disables caching of API responses. Health checks bypass the limiter to avoid turning request bursts into false liveness failures. The API derives source identity from the TCP peer and deliberately ignores caller-supplied forwarding headers. Reverse-proxy deployments must account for a shared proxy source address or enforce limits at a trusted edge. These safeguards do not provide TLS and do not replace firewalling, secret management, or identity-provider claim review.

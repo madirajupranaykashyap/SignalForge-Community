@@ -59,6 +59,7 @@ type Server struct {
 	tx *managementstore.Tx
 	txErr error
 	oidc *oidcauth.Verifier
+	limiter *rateLimiter
 }
 
 func hash(v string) string { h:=sha256.Sum256([]byte(v)); return hex.EncodeToString(h[:]) }
@@ -68,7 +69,7 @@ func newServer(path, admin string)(*Server,error){
 	initial:=State{Tenants:map[string]bool{},Tokens:map[string]Token{},Agents:map[string]Agent{},Policies:map[string][]Policy{},Audit:[]map[string]string{}}
 	payload,err:=json.Marshal(initial);if err!=nil{return nil,err}
 	store,err:=managementstore.Open(path,payload);if err!=nil{return nil,err}
-	return &Server{adminHash:hash(admin),store:store,state:initial},nil
+	return &Server{adminHash:hash(admin),store:store,state:initial,limiter:newRateLimiter(defaultRateLimitRPM)},nil
 }
 func (s *Server) persist()error{
 	if s.tx==nil{return errors.New("management transaction is not active")}
@@ -82,7 +83,7 @@ func (s *Server) decode(w http.ResponseWriter,r *http.Request,v any)bool{
 }
 func (s *Server) adminAuth(r *http.Request)bool{v:=strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ");if v==""||v==r.Header.Get("Authorization"){return false};return subtle.ConstantTimeCompare([]byte(hash(v)),[]byte(s.adminHash))==1}
 func (s *Server) agentAuth(r *http.Request)(Agent,bool){v:=strings.TrimPrefix(r.Header.Get("Authorization"),"Bearer ");if v==""||v==r.Header.Get("Authorization"){return Agent{},false};h:=hash(v);for _,a:=range s.state.Agents{if a.CredentialHash!=""&&subtle.ConstantTimeCompare([]byte(h),[]byte(a.CredentialHash))==1&&!a.Revoked{return a,true}};return Agent{},false}
-func (s *Server) ServeHTTP(w http.ResponseWriter,r *http.Request){
+func (s *Server) serveHTTPCore(w http.ResponseWriter,r *http.Request){
 	if r.URL.Path=="/healthz"&&r.Method=="GET"{w.Header().Set("Content-Type","application/json");_ = json.NewEncoder(w).Encode(map[string]string{"status":"healthy"});return}
 	// A write-reserving SQLite transaction spans load -> handler -> save, so
 	// concurrent processes cannot overwrite state from a stale in-memory copy.
@@ -154,6 +155,11 @@ func main(){
 	if issuer!=""||audience!=""||jwks!="" {
 		s.oidc,e=oidcauth.New(oidcauth.Config{Issuer:issuer,Audience:audience,JWKSURL:jwks,TenantClaim:os.Getenv("SIGNALFORGE_OIDC_TENANT_CLAIM"),RolesClaim:os.Getenv("SIGNALFORGE_OIDC_ROLES_CLAIM")})
 		if e!=nil{_ = s.store.Close();log.Fatal(e)}
+	}
+	if raw:=os.Getenv("SIGNALFORGE_RATE_LIMIT_RPM");raw!=""{
+		rpm,parseErr:=strconv.Atoi(raw)
+		if parseErr!=nil||rpm<1||rpm>10000{_ = s.store.Close();log.Fatal("SIGNALFORGE_RATE_LIMIT_RPM must be an integer between 1 and 10000")}
+		s.limiter=newRateLimiter(rpm)
 	}
 	addr:=os.Getenv("SIGNALFORGE_MANAGEMENT_ADDR");if addr==""{addr="127.0.0.1:8081"}
 	srv:=&http.Server{Addr:addr,Handler:s,ReadHeaderTimeout:5*time.Second,IdleTimeout:60*time.Second}

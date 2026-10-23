@@ -34,7 +34,7 @@ Existing `/api/v1/admin/*` routes remain protected by `SIGNALFORGE_ADMIN_TOKEN`;
 
 - Persistence is still a local JSON file; transactions across replicas/processes are not supported.
 - OIDC user-to-tenant membership and role assignment are trusted from configured claims; provider-specific claim mapping and authorization policy still require deployment review.
-- No tenant UI, refresh-token flow, dynamic client registration, or rate limiting is included.
+- No tenant UI, refresh-token flow, or dynamic client registration is included. Phase 22 adds API-level per-source rate limiting and security headers; deployment-specific TLS, trusted proxy policy, and identity-provider claim mapping remain operator responsibilities.
 - Policy payloads are digest-normalized but are not yet validated against a selected OpenTelemetry Collector distribution schema.
 - Live Collector pipeline activation, transactional database migrations, backup/restore, and end-to-end outage/rollback testing remain required before production use.
 
