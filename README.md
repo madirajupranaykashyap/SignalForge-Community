@@ -21,7 +21,7 @@ A Podman Compose package for the custom OpenTelemetry Collector is available in 
 
 ## Development
 
-See [docs/architecture.md](docs/architecture.md) for the architecture and development plan, and [the operations recovery runbook](docs/operations-recovery.md) for outage, rollback, and database recovery procedures.
+See [docs/architecture.md](docs/architecture.md) for the architecture and development plan, and [the operations recovery runbook](docs/operations-recovery.md) for outage, rollback, and database recovery procedures. The runbook documents validated SQLite backup/restore helper scripts.
 
 ## License
 
@@ -38,4 +38,8 @@ The Collector exposes input and post-optimization log count metrics through a lo
 - Phase 19 adds an authenticated remote config polling client with bounded request sizes/timeouts, HTTPS enforcement for non-loopback endpoints, applied/rejected acknowledgements, and retry backoff with jitter. See [the polling client contract](docs/config-polling-client.md) and [test plan](docs/config-polling-test-plan.md).
 - Phase 20 adds OIDC RS256 verification and tenant-scoped role-based API routes. See [Tenant OIDC and RBAC](docs/tenant-oidc-rbac.md).
 
-The follow-up integration phase adds SQLite transactional state with a legacy JSON import/backup path, a Collector agent runtime adapter, distribution-specific validation through the shipped Collector binary, and rollback on failed restart/health checks. CI tests storage transactions, validation failures, restart rollback, and the Collector container smoke path. This is still not a multi-host SaaS control plane: SQLite is intended for a single host/local durable volume, and production identity-provider claim mapping, PostgreSQL or equivalent distributed persistence, TLS deployment, backup/restore drills, rate limiting, and real-environment outage testing remain release gates.
+The follow-up integration phase adds SQLite transactional state with a legacy JSON import/backup path, a Collector agent runtime adapter, distribution-specific validation through the shipped Collector binary, and rollback on failed restart/health checks. CI tests storage transactions, validation failures, restart rollback, and the Collector container smoke path. This is still not a multi-host SaaS control plane: SQLite is intended for a single-host/local durable volume, and production identity-provider claim mapping, PostgreSQL or equivalent distributed persistence, TLS deployment, backup/restore drills, rate limiting, and real-environment outage testing remain release gates.
+
+## Phase 21: repeatable management database recovery
+
+Adds operator-invoked SQLite backup and restore helpers that use the SQLite integrity check, restrictive file permissions, atomic publication of completed backups, and a restore flow that refuses to overwrite an existing database. See [the operations recovery runbook](docs/operations-recovery.md). This is a single-host recovery improvement, not a substitute for encrypted off-host backups, restore drills, or PostgreSQL before multi-host deployment.
