@@ -1,10 +1,10 @@
 package oidcauth
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
-	"crypto"
 	"encoding/base64"
 	"encoding/json"
 	"math/big"
@@ -50,16 +50,15 @@ func TestRejectsWrongIssuerAudienceExpiryAndAlgorithm(t *testing.T) {
 }
 func TestNewRequiresSecureJWKSURL(t *testing.T) {
 	for _,raw:=range []string{"http://identity.example/jwks","not a url",""} {
-		if _,err:=New(Config{Issuer:"issuer",Audience:"api",JWKSURL:raw});err==nil{t.Fatalf("accepted unsafe URL %q",raw)}
+		if _,err:=New(Config{Issuer:"https://issuer.example",Audience:"api",JWKSURL:raw});err==nil{t.Fatalf("accepted unsafe URL %q",raw)}
 	}
-	if _,err:=New(Config{Issuer:"issuer",Audience:"api",JWKSURL:"http://localhost:9000/jwks"});err!=nil{t.Fatal(err)}
+	if _,err:=New(Config{Issuer:"https://issuer.example",Audience:"api",JWKSURL:"http://localhost:9000/jwks"});err!=nil{t.Fatal(err)}
 }
 func TestRejectsMalformedTokenAndMissingTenant(t *testing.T) {
 	key,err:=rsa.GenerateKey(rand.Reader,2048);if err!=nil{t.Fatal(err)}
 	server:=httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter,r *http.Request){_ = json.NewEncoder(w).Encode(map[string]any{"keys":[]any{jwk(&key.PublicKey)}})}));defer server.Close()
-	v,err:=New(Config{Issuer:"issuer",Audience:"api",JWKSURL:server.URL});if err!=nil{t.Fatal(err)}
+	v,err:=New(Config{Issuer:"https://issuer.example",Audience:"api",JWKSURL:server.URL});if err!=nil{t.Fatal(err)}
 	if _,err=v.Verify("one.two");err==nil{t.Fatal("malformed token accepted")}
-	tok:=signedToken(t,key,map[string]any{"alg":"RS256","kid":"key-1"},map[string]any{"iss":"issuer","aud":"api","sub":"u","exp":strconv.FormatInt(time.Now().Unix()+60,10)})
-	// exp as a string is invalid and the missing tenant must never be accepted.
+	tok:=signedToken(t,key,map[string]any{"alg":"RS256","kid":"key-1"},map[string]any{"iss":"https://issuer.example","aud":"api","sub":"u","exp":strconv.FormatInt(time.Now().Unix()+60,10)})
 	if _,err=v.Verify(tok);err==nil||!strings.Contains(err.Error(),"required OIDC claims"){t.Fatalf("unexpected error: %v",err)}
 }
