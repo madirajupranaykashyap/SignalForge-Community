@@ -98,6 +98,56 @@ jobs:
           find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
           exit 1
 
+      - name: Verify optimization policy and archive completeness
+        shell: bash
+        run: |
+          set -euo pipefail
+          debug_marker="SIGNALFORGE-POLICY-DROP-$(date +%s)"
+          info_marker="SIGNALFORGE-POLICY-KEEP-$(date +%s)"
+          echo "DEBUG_MARKER=$debug_marker" >> "$GITHUB_ENV"
+          echo "INFO_MARKER=$info_marker" >> "$GITHUB_ENV"
+
+          payload=$(printf '{"resourceLogs":[{"resource":{"attributes":[{"key":"service.name","value":{"stringValue":"signalforge-policy-test"}}]},"scopeLogs":[{"logRecords":[{"severityText":"DEBUG","body":{"stringValue":"%s"}},{"severityText":"INFO","body":{"stringValue":"%s"}}]}]}]}' "$debug_marker" "$info_marker")
+          response=$(curl --silent --show-error --output "$RUNNER_TEMP/policy-response.json" --write-out '%{http_code}' --header 'Content-Type: application/json' --data "$payload" http://127.0.0.1:14318/v1/logs)
+          if [ "$response" != "200" ]; then
+            cat "$RUNNER_TEMP/policy-response.json"
+            echo "Policy test OTLP request returned HTTP $response (expected 200)."
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            logs=$(docker logs signalforge-collector-ci 2>&1 || true)
+            if printf '%s' "$logs" | grep -F -- "$info_marker" >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+
+          logs=$(docker logs signalforge-collector-ci 2>&1 || true)
+          if ! printf '%s' "$logs" | grep -F -- "$info_marker" >/dev/null; then
+            echo "Expected INFO marker was not emitted by the optimized pipeline."
+            docker logs signalforge-collector-ci
+            exit 1
+          fi
+          if printf '%s' "$logs" | grep -F -- "$debug_marker" >/dev/null; then
+            echo "DEBUG marker unexpectedly reached the optimized debug exporter."
+            docker logs signalforge-collector-ci
+            exit 1
+          fi
+
+          for attempt in $(seq 1 30); do
+            if grep -R -F -- "$debug_marker" "$RUNNER_TEMP/signalforge-archive" >/dev/null \
+              && grep -R -F -- "$info_marker" "$RUNNER_TEMP/signalforge-archive" >/dev/null; then
+              echo "Optimization policy dropped DEBUG downstream while retaining both records in the raw archive."
+              exit 0
+            fi
+            sleep 1
+          done
+
+          echo "Raw archive did not contain both policy test records."
+          find "$RUNNER_TEMP/signalforge-archive" -maxdepth 2 -type f -print
+          exit 1
+
       - name: Send OTLP trace and metric smoke tests
         shell: bash
         run: |
