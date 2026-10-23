@@ -33,6 +33,7 @@ type envelope struct {
 
 type Fetcher struct {
 	endpoint string
+	ackEndpoint string
 	credential string
 	httpClient *http.Client
 	mu sync.Mutex
@@ -53,10 +54,15 @@ func NewFetcher(endpoint, credential string, client *http.Client) (*Fetcher, err
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return nil, errors.New("unsupported config endpoint scheme")
 	}
+	if !strings.HasSuffix(strings.TrimRight(u.Path, "/"), "/api/v1/agents/config") {
+		return nil, errors.New("config endpoint path must end in /api/v1/agents/config")
+	}
 	if client == nil {
 		client = &http.Client{Timeout: 10 * time.Second}
 	}
-	return &Fetcher{endpoint: strings.TrimRight(endpoint, "/"), credential: credential, httpClient: client}, nil
+	endpoint = strings.TrimRight(endpoint, "/")
+	ackEndpoint := strings.TrimSuffix(endpoint, "/config") + "/config/ack"
+	return &Fetcher{endpoint: endpoint, ackEndpoint: ackEndpoint, credential: credential, httpClient: client}, nil
 }
 
 func isLoopbackHost(host string) bool {
@@ -68,6 +74,9 @@ func isLoopbackHost(host string) bool {
 }
 
 func (f *Fetcher) FetchConfig(ctx context.Context) (configcache.Config, error) {
+	f.mu.Lock()
+	f.last = nil
+	f.mu.Unlock()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, f.endpoint, nil)
 	if err != nil {
 		return configcache.Config{}, err
@@ -128,7 +137,7 @@ func (f *Fetcher) Acknowledge(ctx context.Context, version int, applied bool, me
 	if err != nil {
 		return err
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(f.endpoint, "/")[:len(strings.TrimRight(f.endpoint, "/"))-len("/config")]+"/config/ack", bytes.NewReader(payload))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, f.ackEndpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}
