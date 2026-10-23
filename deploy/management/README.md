@@ -15,6 +15,14 @@ curl --fail http://127.0.0.1:8081/healthz
 
 Generate an admin token with `openssl rand -hex 32`. Never commit the populated `.env` file or share the token. The endpoint is bound to `127.0.0.1` unless you explicitly override `MANAGEMENT_BIND`; changing the bind address does not add TLS. Put remote traffic behind a TLS-terminating reverse proxy and firewall.
 
+## Request limits and response protections
+
+The API applies a per-source token-bucket limit to requests other than `/healthz`. The default is 120 requests per minute per source address. Override with `SIGNALFORGE_RATE_LIMIT_RPM` (integer from 1 through 10000) based on expected agent polling and tenant traffic. Rate-limited requests return HTTP 429 and `Retry-After`. The health endpoint is exempt to keep liveness checks stable during API bursts.
+
+Source identity uses the TCP peer address; the API intentionally does not trust `X-Forwarded-For` or similar caller-supplied headers. Behind a reverse proxy, requests may share the proxy address and therefore a rate bucket. If per-client limiting is needed behind a proxy, configure trusted client identity at the proxy/firewall or implement an explicit trusted-proxy policy rather than blindly trusting forwarding headers.
+
+Responses include basic browser security headers. API responses use `Cache-Control: no-store`. These controls are defense-in-depth, not a replacement for authentication, TLS, network policy, or identity-provider review. The application does not enable HSTS itself because TLS is expected to terminate at the deployment edge.
+
 ## OIDC configuration
 
 To enable tenant-user routes, configure `SIGNALFORGE_OIDC_ISSUER`, `SIGNALFORGE_OIDC_AUDIENCE`, and `SIGNALFORGE_OIDC_JWKS_URL` together. Use the identity provider's HTTPS issuer and HTTPS JWKS endpoint. Claim names default to `tenant_id` and `roles`. The provider must securely assign these claims; test tenant isolation before use.
