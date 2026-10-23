@@ -26,7 +26,7 @@ processors:
 
 exporters:
   debug:
-    verbosity: basic
+    verbosity: detailed
   file/archive:
     path: /var/lib/signalforge/archive/logs.jsonl
     append: true
@@ -40,7 +40,7 @@ service:
     logs:
       receivers: [otlp]
       processors: [memory_limiter, batch, filter/drop-noisy]
-      exporters: [debug]
+      exporters: [debug, file/archive]
 
     # Archive pipeline: receives the original records before filtering.
     logs/archive:
