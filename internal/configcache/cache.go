@@ -2,6 +2,7 @@ package configcache
 
 import (
 	"context"
+	"encoding/base64"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -101,17 +102,28 @@ func verify(c Config) error {
 	return nil
 }
 func clone(c Config) Config { c.Config = append(json.RawMessage(nil), c.Config...); return c }
+type diskConfig struct {
+	Version int `json:"version"`
+	SchemaVersion string `json:"schema_version"`
+	Digest string `json:"digest"`
+	ConfigBase64 string `json:"config_base64"`
+}
+
 func readConfig(path string) (Config, error) {
 	var c Config
 	b, err := os.ReadFile(path); if err != nil { return c, err }
-	if err := json.Unmarshal(b, &c); err != nil { return c, err }
+	var d diskConfig
+	if err := json.Unmarshal(b, &d); err != nil { return c, err }
+	raw, err := base64.RawStdEncoding.DecodeString(d.ConfigBase64); if err != nil { return c, err }
+	c = Config{Version:d.Version, SchemaVersion:d.SchemaVersion, Digest:d.Digest, Config:json.RawMessage(raw)}
 	if err := verify(c); err != nil { return c, err }
 	return c, nil
 }
 func writeTemp(path string, c Config) (string, error) {
 	dir := filepath.Dir(path)
 	if err := os.MkdirAll(dir, 0700); err != nil { return "", err }
-	b, err := json.Marshal(c); if err != nil { return "", err }
+	d := diskConfig{Version:c.Version, SchemaVersion:c.SchemaVersion, Digest:c.Digest, ConfigBase64:base64.RawStdEncoding.EncodeToString(c.Config)}
+	b, err := json.Marshal(d); if err != nil { return "", err }
 	f, err := os.CreateTemp(dir, ".signalforge-config-*"); if err != nil { return "", err }
 	name := f.Name(); ok := false
 	defer func() { _ = f.Close(); if !ok { _ = os.Remove(name) } }()
